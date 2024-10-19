@@ -16,7 +16,7 @@ class secureSql:
     key_db_path = f"{script_dir}/{utilities_dir}/{db_folder}/{key_db_name}.db"
     user_db_path = f"{script_dir}/{utilities_dir}/{db_folder}/{user_db_name}.db"
     initial_userinfo_path = f"{script_dir}/admin_info.json"
-    print(user_db_path)
+
 
     def __init__(self):
         self.user_db_key = str(token_hex(2048))
