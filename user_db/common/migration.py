@@ -24,6 +24,7 @@ class secureSql:
         print("init")
 
     def createUserDB(self):
+        print("got to createuserdb")
         print(secureSql.user_db_path)
         self.user_db = securesql.connect(secureSql.user_db_path)
         self.user_db_cursor = self.user_db.cursor()

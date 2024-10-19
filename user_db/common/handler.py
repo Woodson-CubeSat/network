@@ -29,7 +29,7 @@ class secureSql:
             key_db_cursor = key_db.cursor()
             # try statement to catch error in authentication
             try:
-                # connect to key db, fetch user db key
+                #connect to key db, fetch user db key
                 key_db_cursor.executescript(
                     f"""
                     PRAGMA key = '{key_db_pass}';
@@ -65,9 +65,9 @@ class secureSql:
                 else:
                     user_error = True
                 if data[0][1] == 1:
-                    is_admin = True
+                    is_admin = 1
                 else:
-                    is_admin = False
+                    is_admin = 0
                 user_db.close()
                 if user_error:
                     print("The username or password was incorrect")
@@ -86,7 +86,10 @@ class secureSql:
                 #added for readability
                 key_error = True
                 return key_error # migrate over to flask
-        
+            
+    # note: using this function with the admin user created with the database
+    # (that does not have data for all fields) may bring up unknown errors,
+    # and this use case should be avoided
     def getUserInfo(
         self,
         key_db_token: str,
@@ -97,55 +100,62 @@ class secureSql:
         callsign: bool = False,
         key_id: bool = False
     ):
-        
-        # try:
+        error_message = ""
+        try:
+            error = False
+            if key_db_token == None:
+                error_message = "Database encryption key was not passed."
+                error = True
+            try:
+                print("db path: ", self.user_db_path)
+                # gets user_db key, and confirms admin status
+                user_db_key, admin_check = self.authenticate(id=user_id, passwd=passwd_hash, key_db_pass=key_db_token, access_db=True)
+                print("passed auth")
+                user_db = securesql.connect(self.user_db_path)
+                user_db_cursor = user_db.cursor()
+                user_db_cursor.executescript(
+                    f"""PRAGMA key='{user_db_key}';
+
+                        PRAGMA cipher_compatibility = 3
+                    """
+                    )
+            except:
+                error_message = "Database key is incorrect."
+                error = True
+            if user_id == None or passwd_hash == None:
+                error_message = "Either the user_id or password hash was not passed."
+                error = True
+            if error:
+                return error, error_message, {}
+            if email_login or is_admin or key_id or callsign:
+                print(f"""select config_id from users where user_id=? and passwd_hash=?""", (user_id, passwd_hash))
+                user_db_cursor.execute(f"""select config_id from users where user_id=? and passwd_hash=?""", (user_id, passwd_hash))
+                config_id = user_db_cursor.fetchall()
+                if email_login  and not is_admin and not key_id and not callsign:
+                    user_db_cursor.execute(f"""select email, email_passwd from vars where config_id=?""", (config_id,))
+                    data = user_db_cursor.fetchall()
+                    print(data)
+                    info = {'email': data[0][0], 'email_passwd': data[0][1]}
+                if not email_login and not is_admin and key_id and not callsign:
+                    info = {"key_id": config_id}
+            if not email_login  and is_admin and not key_id and not callsign:
+                if admin_check:
+                    info = {"is_admin": True}
+            if not email_login and is_admin and not key_id and callsign:
+                if admin_check:
+                    user_db_cursor.execute(f"""select callsign from users where user_id=? and passwd_hash=?""", (user_id, passwd_hash))
+                    data = user_db_cursor.fetchall()
+                    info = {"callsign": data[0][0]}
+
+        except:
+            error = True
+            error_message = "An unknown error occured."
+            info = {}
+
         error = False
-        if key_db_token == None:
-            print("Database encryption key was not passed.")
-            error = True
-        # try:
-        print("db path: ", self.user_db_path)
-        user_db_key, is_admin = self.authenticate(id=user_id, passwd=passwd_hash, key_db_pass=key_db_token)
-        user_db = securesql.connect(self.user_db_path)
-        user_db_cursor = user_db.cursor()
-        user_db_cursor.executescript(
-            f"""PRAGMA key='{user_db_key}';
+        print(info)
+        return error, error_message, info
 
-                PRAGMA cipher_compatibility = 3
-            """
-            )
-        # except:
-            # print("Database key is incorrect.")
-            # error = True
-        if user_id == None or passwd_hash == None:
-            print("Either the user_id or password hash was not passed.")
-            error = True
-        if error:
-            return error, ''
-        if email_login or is_admin or key_id or callsign:
-            user_db_cursor.execute(f"""select config_id from users where user_id={user_id} and passwd_hash={passwd_hash}""")
-            config_id = user_db_cursor.fetchall()
-            if email_login  and not is_admin and not key_id and not callsign:
-                user_db_cursor.execute(f"""select email, email_passwd from vars where config_id={config_id}""")
-                data = user_db_cursor.fetchall()
-                info = {'email': data[0][0], 'email_passwd': data[0][1]}
-            if not email_login and not is_admin and key_id and not callsign:
-                info = {"key_id": config_id}
-        if not email_login  and is_admin and not key_id and not callsign:
-            info = {"is_admin": is_admin}
-        if not email_login and is_admin and not key_id and callsign:
-            if is_admin:
-                user_db_cursor.execute(f"""select callsign from users where user_id={user_id} and passwd_hash={passwd_hash}""")
-                data = user_db_cursor.fetchall()
-                info = {"callsign": data[0][0]}
-
-        # except:
-            # error = True
-            # print("An unknown error occured.")
-            # return error, {}
-
-        # error = False
-        # return error, info
 
 
         
@@ -236,14 +246,14 @@ class secureSql:
 
                     PRAGMA cipher_compatibility = 3;
 
-                    select config_id from users where user_id={user_id}"""
+                    select config_id from users where user_id='{user_id}'"""
                 )
                 config_id = user_db_cursor.fetchall()[0][0]
                 user_db_cursor.executescript(
                     f"""
-                    delete from users where user_id={user_id};
+                    delete from users where user_id='{user_id}';
 
-                    delete from vars where config_id={config_id}
+                    delete from vars where config_id='{config_id}'
                     """
                     )
                 user_db.commit()

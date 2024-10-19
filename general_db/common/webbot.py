@@ -2,9 +2,11 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 import time
+import subprocess
 import pickle
-from general_db.common.constants import script_dir
+#from general_db.common.constants import script_dir
 
+script_dir = str(subprocess.check_output(["pwd"])).replace("b'", "").replace("n'", "")[:-1]
 web = webdriver.Chrome()
 
 #fix this function later
@@ -29,8 +31,6 @@ def saveCookies():
     #     pickle.dump(firefox.get_cookies(), filehandler)
 
     print(firefox.get_cookies)
-
-
 
 
 

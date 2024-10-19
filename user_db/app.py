@@ -9,7 +9,7 @@ api = Api(app)
 
 # routing
 api.add_resource(authenticate, '/auth')
-api.add_resource(user, '/user/get_info/')
+api.add_resource(user, '/user_actions')
 
 if __name__ == '__main__':
     app.run(debug=True)

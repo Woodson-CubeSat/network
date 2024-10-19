@@ -60,220 +60,61 @@ class sql:
 
     table = ""
 
-    # no init method needed
+
     def getTelemetry(self, norad_id: int, start_time: int = None, end_time: int = None, station: str = None, return_metadata: bool = False):
         telemetry = []
-        # find data_type and set which table we are querying, using single quotes so sqlite doesn't get confused
+        query = "SELECT * FROM frames WHERE 1=1"  # Base query
+        params = []
+
         try:
-            if norad_id != None:
-                if start_time == None and end_time == None and station != None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE satellite={norad_id} AND station={station}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            telemetry.append([data[i][1], data[i][2]])
+            # Add conditions to the query based on the provided parameters
+            if norad_id is not None:
+                query += " AND satellite = ?"
+                params.append(norad_id)
+        
+            if station is not None:
+                query += " AND station = ?"
+                params.append(station)
+        
+            if start_time is not None:
+                query += " AND timestamp >= ?"
+                params.append(start_time)
+        
+            if end_time is not None:
+                query += " AND timestamp <= ?"
+                params.append(end_time)
 
-                if start_time != None and end_time != None and station == None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE satellite={norad_id}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][1], data[i][2]])
-                if start_time != None and end_time != None and station != None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE satellite={norad_id} AND station={station}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][1], data[i][2]])
+            # Execute the query with the collected parameters
+            self.cursor.execute(query, params)
+            data = self.cursor.fetchall()
 
-                if start_time == None and end_time != None and station == None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE satellite={norad_id}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][1], data[i][2]])
-
-                if start_time == None and end_time == None and station == None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE satellite={norad_id}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            telemetry.append([data[i][1], data[i][2]])
-
-                if start_time != None and end_time == None and station != None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE satellite={norad_id} AND station={station}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time:
-                                telemetry.append([data[i][1], data[i][2]])
-
-                if start_time == None and end_time != None and station != None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE satellite={norad_id} AND station={station}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][1], data[i][2]])
-                if start_time != None and end_time == None and station == None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE satellite={norad_id}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time:
-                                telemetry.append([data[i][1], data[i][2]])
-
-            if norad_id == None:
-                if start_time != None and end_time != None and station == None:
-                    self.cursor.execute(f"""SELECT * FROM frames""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][1], data[i][2]])
-
-                if start_time == None and end_time == None and station != None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE station={station}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            telemetry.append([data[i][1], data[i][2]])
-
-                if start_time != None and end_time != None and station == None:
-                    self.cursor.execute("""SELECT * FROM frames""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][1], data[i][2]])
-                if start_time != None and end_time != None and station != None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE station={station}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time and int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][1], data[i][2]])
-
-                if start_time == None and end_time != None and station == None:
-                    self.cursor.execute("""SELECT * FROM frames""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][1], data[i][2]])
-
-                if start_time == None and end_time == None and station == None:
-                    self.cursor.execute("""SELECT * FROM frames""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            telemetry.append([data[i][1], data[i][2]])
-
-                if start_time != None and end_time == None and station != None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE station={station}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time:
-                                telemetry.append([data[i][1], data[i][2]])
-
-                if start_time == None and end_time != None and station != None:
-                    self.cursor.execute(f"""SELECT * FROM frames WHERE station={station}""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) <= end_time:
-                                telemetry.append([data[i][1], data[i][2]])
-                if start_time != None and end_time == None and station == None:
-                    self.cursor.execute("""SELECT * FROM frames""")
-                    data = self.cursor.fetchall()
-                    if return_metadata:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time:
-                                telemetry.append([data[i][0], data[i][1], data[i][2], data[i][3]])
-                    else:
-                        for i in range(len(data)):
-                            if int(data[i][1]) >= start_time:
-                                telemetry.append([data[i][1], data[i][2]])
-        except:
-            telemetry = 1  # this will change when I assign actual db error numbers
-        if telemetry != 1:
-            if return_metadata:
-                sorted(telemetry, key=operator.itemgetter(1))
-            else:
-                sorted(telemetry, key=operator.itemgetter(0))
-
-            for i in range(len(telemetry)):
+            # Process the data based on return_metadata flag
+            for row in data:
+                timestamp = int(row[1])  # Assuming the timestamp is in the second column
                 if return_metadata:
-                    telemetry[i][1] = datetime.datetime.utcfromtimestamp(telemetry[i][1]).strftime("%Y-%m-%d %H:%M:%S")
+                    telemetry.append([row[0], timestamp, row[2], row[3]])  # Append all metadata
                 else:
-                    telemetry[i][0] = datetime.datetime.utcfromtimestamp(telemetry[i][0]).strftime("%Y-%m-%d %H:%M:%S")
+                    telemetry.append([timestamp, row[2]])  # Append limited data
+
+            # Handle no errors found
+            if telemetry:
+                # Sort telemetry by timestamp (index 1 for metadata, index 0 otherwise)
+                telemetry.sort(key=operator.itemgetter(1) if return_metadata else operator.itemgetter(0))
+
+                # Convert timestamps to human-readable format
+                for i in range(len(telemetry)):
+                    if return_metadata:
+                        telemetry[i][1] = datetime.datetime.utcfromtimestamp(telemetry[i][1]).strftime("%Y-%m-%d %H:%M:%S")
+                    else:
+                        telemetry[i][0] = datetime.datetime.utcfromtimestamp(telemetry[i][0]).strftime("%Y-%m-%d %H:%M:%S")
+
+        except Exception as e:
+            print(f"Error: {e}")
+            telemetry = 1  # Placeholder error handling, update with proper DB error codes
 
         print(telemetry)
         return telemetry
+
 
     def getSatInfo(
         self,
@@ -393,17 +234,17 @@ class sql:
         print("finished")
 
     def getTrackerInfo(self, station_id: str):
-        self.cursor.execute(f"""select lat, lng, alt from groundstations where station_id={station_id}""")
+        self.cursor.execute(f"""select lat, lng, alt from groundstations where station_id=?""", (station_id,))
         data = self.cursor.fetchall()
         info = [data[0][0], data[0][1], data[0][2]]
     
     def getKey(self, key_id: str, satnogs_key: bool = False, n2yo_key: bool = False):
         if satnogs_key:
-            self.cursor.execute(f"""select satnogs_key from keys where key_id={key_id}""")
+            self.cursor.execute(f"""select satnogs_key from keys where key_id=?""", (key_id,))
             data = self.cursor.fetchall()
             info = [data[0][0]]
         if n2yo_key:
-            self.cursor.execute(f"""select n2yo_key from keys where key_id={key_id}""")
+            self.cursor.execute(f"""select n2yo_key from keys where key_id=?""", (key_id,))
             data = self.cursor.fetchall()
             info = [data[0][0]]
 
