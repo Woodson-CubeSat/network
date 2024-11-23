@@ -42,14 +42,14 @@ class secureSql:
                 is_admin int,
                 callsign str,
                 creation_time str,
-                config_id str
+                key_id str
             );
 
-            create table if not exists vars (
-                config_id int,
+            create table if not exists logins (
+                key_id int,
                 email str,
                 email_passwd str,
-                satnogs_cookie blob
+                satnogs_cookies blob
             )
             
             """
@@ -125,4 +125,4 @@ if __name__ == "__main__":
 
 # fix SQL get and append
 # change DBCheck and update_frames to work with new DB system
-# HI POOKIE DOOKIE BOOKIE BEAR
+
