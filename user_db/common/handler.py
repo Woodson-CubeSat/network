@@ -5,6 +5,7 @@ from pysqlcipher3 import dbapi2 as securesql
 
 print(script_dir)
 # todo: add delete user, modify user info
+# if error=False, then no error, vice versa
 
 class secureSql:
 
@@ -65,9 +66,9 @@ class secureSql:
                 else:
                     user_error = True
                 if data[0][1] == 1:
-                    is_admin = 1
+                    is_admin = True
                 else:
-                    is_admin = 0
+                    is_admin = False
                 user_db.close()
                 if user_error:
                     print("The username or password was incorrect")
@@ -89,7 +90,7 @@ class secureSql:
             
     # note: using this function with the admin user created with the database
     # (that does not have data for all fields) may bring up unknown errors,
-    # and this use case should be avoided
+    # and this use case should be avoided.
     def getUserInfo(
         self,
         key_db_token: str,
@@ -98,14 +99,13 @@ class secureSql:
         email_login: bool = False,
         is_admin: bool = False,
         callsign: bool = False,
-        key_id: bool = False
+        key_id: bool = False,
+        creation_time: bool = False
     ):
+        final_json = {}
         error_message = ""
         try:
             error = False
-            if key_db_token == None:
-                error_message = "Database encryption key was not passed."
-                error = True
             try:
                 print("db path: ", self.user_db_path)
                 # gets user_db key, and confirms admin status
@@ -120,40 +120,43 @@ class secureSql:
                     """
                     )
             except:
-                error_message = "Database key is incorrect."
-                error = True
-            if user_id == None or passwd_hash == None:
-                error_message = "Either the user_id or password hash was not passed."
+                error_message = "Credentials are incorrect."
                 error = True
             if error:
                 return error, error_message, {}
-            if email_login or is_admin or key_id or callsign:
+            if email_login or key_id or callsign and not is_admin and not creation_time:
                 print(f"""select config_id from users where user_id=? and passwd_hash=?""", (user_id, passwd_hash))
                 user_db_cursor.execute(f"""select config_id from users where user_id=? and passwd_hash=?""", (user_id, passwd_hash))
                 config_id = user_db_cursor.fetchall()
-                if email_login  and not is_admin and not key_id and not callsign:
-                    user_db_cursor.execute(f"""select email, email_passwd from vars where config_id=?""", (config_id,))
+                if email_login and not key_id and not callsign:
+                    user_db_cursor.execute(f"""select email, email_passwd from logins where config_id=?""", (config_id,))
                     data = user_db_cursor.fetchall()
                     print(data)
                     info = {'email': data[0][0], 'email_passwd': data[0][1]}
-                if not email_login and not is_admin and key_id and not callsign:
+                if not email_login and key_id and not callsign:
                     info = {"key_id": config_id}
-            if not email_login  and is_admin and not key_id and not callsign:
+            if not email_login  and is_admin and not key_id and not callsign and not creation_time:
                 if admin_check:
                     info = {"is_admin": True}
-            if not email_login and is_admin and not key_id and callsign:
+                else:
+                    info = {"is_admin": False}
+            if not email_login and not is_admin and not key_id and callsign and not creation_time:
                 if admin_check:
                     user_db_cursor.execute(f"""select callsign from users where user_id=? and passwd_hash=?""", (user_id, passwd_hash))
                     data = user_db_cursor.fetchall()
                     info = {"callsign": data[0][0]}
-
+            if not email_login and not is_admin and not key_id and notcallsign:
+    
         except:
             error = True
-            error_message = "An unknown error occured."
             info = {}
-
+            error_message = "An unknown error occured."
+            
+            # return error
+            return error, error_message, {}
+        
         error = False
-        print(info)
+        print("got info:"+f"{info}")
         return error, error_message, info
 
 
@@ -161,27 +164,27 @@ class secureSql:
         
     def buildUserInfo(
         self,
+        satnogs_cookies, # this will be a file in the form of hex or binary
         auth_user_id: str,
         auth_user_passwd: str,
         key_db_token: str,
         email: str,
         email_passwd: str,
-        key_id: str,
-        satnogs_cookie, # this will be a file in the form of hex or binary
-        n2yo_key: str,
         callsign: str = None,
         create_admin: bool = False
     ):
 
-
+        error_message = ""
         try:
             #authenticate
-            user_db_key, admin_user = self.authenticate(id=auth_user_id, passwd=auth_user_passwd, key_db_token=key_db_token)
+            user_db_key, admin_user = self.authenticate(id=auth_user_id, passwd=auth_user_passwd, key_db_pass=key_db_token, access_db=True)
+            print("passed auth"+"\n\n\n\n\n"+user_db_key+"\n\n\n\n\n"+str(admin_user))
             if not admin_user:
                 error = True
-                return  error # migrate to flask
+                error_message = "Authentication failed. Must be an administrator to create a new user."
+                return  error, error_message, {} 
             else:
-                user_db = securesql.connect(secureSql.user_db_path)
+                user_db = securesql.connect(self.user_db_path)
                 user_db_cursor = user_db.cursor()
                 
                 #create admin variable
@@ -192,30 +195,48 @@ class secureSql:
 
                 # create ids
                 user_id = token_hex(16)
-                config_id = token_hex(16)
+                key_id = token_hex(16) # the key_id value is an identifier used throughout the database APIs to identify user logins and keys
                 passwd_hash = token_hex(1024)
 
                 #create user
                 user_db_cursor.executescript(
                     f"""
-                    PRAGMA key = '{user_db_key}';
+                    PRAGMA key='{user_db_key}';
 
-                    PRAGMA cipher_compatibility = 3;
-                    
-                    insert into users (user_id, passwd_hash, is_admin, callsign, creation_time, config_id) values ({user_id}, {passwd_hash}, {is_admin}, {callsign}, {time.time()}, {config_id})
-
-                    insert into vars (config_id, email, email_passwd, key_id, n2yo_key) values ({config_id}, {email}, {email_passwd}, {key_id}, {satnogs_cookie} {n2yo_key})
+                    PRAGMA cipher_compatibility = 3
+                    """)
+            
+                user_db_cursor.execute(
                     """
+                    insert into users (user_id, passwd_hash, is_admin, callsign, creation_time, key_id)
+                    values (?, ?, ?, ?, ?, ?)
+                    """,
+                    (user_id, passwd_hash, is_admin, callsign, time.time(), key_id)
+                    )
+
+                user_db_cursor.execute(
+                    """
+                    insert into logins (key_id, email, email_passwd, satnogs_cookies)
+                    values (?, ?, ?, ?)
+                    """,
+                    (key_id, email, email_passwd, satnogs_cookies)
                     )
                 user_db.commit()
                 user_db.close()
             
                 error = False
-                return error, {'user_id': user_id, 'passwd': passwd_hash}
+                # once your account is created by an admin, your data
+                # will be sent over to the webserver, which will cache 
+                # your key_id in the general db via its API
+
+                # you will then get an automated email containing your user ID
+                # and password from the webserver, which you can use to login via
+                # an app
+                return error, error_message, {'user_id': user_id, 'passwd': passwd_hash, "key_id": key_id}
         except:
-            print("An error occured during authetication.")
+            error_message = "An error occurred during user creation. Please try again."
             error = True
-            return error # migrate over to flask
+            return error, error_message, {} 
         
         
     def deleteUser(
@@ -249,12 +270,12 @@ class secureSql:
                     select config_id from users where user_id='{user_id}'"""
                 )
                 config_id = user_db_cursor.fetchall()[0][0]
-                user_db_cursor.executescript(
-                    f"""
-                    delete from users where user_id='{user_id}';
+                user_db_cursor.execute(
+                    """delete from users where user_id = ?""", (user_id,)
+                )
 
-                    delete from vars where config_id='{config_id}'
-                    """
+                user_db_cursor.execute(
+                    """delete from logins where config_id = ?""", (config_id,)
                     )
                 user_db.commit()
                 user_db.close()
