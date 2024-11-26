@@ -385,25 +385,51 @@ class secureSql:
                     )
                     updated += "callsign"
 
-                login_query = "UPDATE users SET "
+                login_query = "UPDATE logins SET "
                 login_params = []
 
                 if email != None:
                     login_query += "email=?"
+                    print(email)
                     login_params.append(email)
-                    updated += ", email"
+                    if updated != "":
+                        updated += ", "
+                    updated += "email"
                 if email_passwd != None:
+                    print("got past this point")
                     login_query += "email_passwd=?"
                     login_params.append(email_passwd)
-                    updated += ", email password"
+                    if updated != "":
+                        updated += ", "
+                    updated += "email password"
                 if satnogs_cookies != None:
                     login_query += "satnogs_cookies=?"
                     login_params.append(satnogs_cookies)
-                    updated += ", satnogs login cookies"
+                    if updated != "":
+                        updated += ", "
+                    updated += "satnogs login cookies"
+                
 
                 # Update login data if needed
-                if login_query != "UPDATE users SET ":
+                print(login_query)
+                if login_query != "UPDATE logins SET ":
+                    login_query += " WHERE key_id=?"
+                    user_db_cursor.execute(
+                    "SELECT key_id FROM users WHERE user_id=?", (user_id,)
+                    )
+                    data = user_db_cursor.fetchall()
+                    if data:
+                        # same thing as key_id, just a different name
+                        # this variable holds the key_id for method usage
+                        print(data)
+                        key_id = data[0][0]
+                        print(key_id)
+                    login_params.append(key_id)
+                    print(login_query)
+                    print(login_params)
                     user_db_cursor.execute(login_query, login_params)
+                elif callsign == None:
+                    return True, "No update values were supplied."
 
             # Create JSON response message
             message = "Successfully updated the following values: "+updated

@@ -2,28 +2,24 @@ from flask import Flask
 from flask_restful import fields, marshal_with, reqparse, Resource, abort
 from common.handler import secureSql
 
-# notes from 11/23/2024
-# change (rewrite) getUserInfo and buildUserInfo (along with API side methods) to use get_struct and marshal_with
-# add option to retrive creation time in getUserInfo
-# finish testing delete user
-# add new file for updating user data (like cookies)
+
 # will end up basing webserver off of test.py requests and processing
 
 
-get_struct = {'key_id': fields.String,
-            'is_admin': fields.Boolean,
-            'callsign': fields.String,
-            'creation_time': fields.Float, # will be transmitted as unix time
-            'satnogs_cookies' : fields.String, # will be transmitted as str and converted to binary object on webserver side (for seeding db)
-            'email_login': fields.Nested({
-                'email': fields.String,
-                'email_passwd': fields.String
-                })
-            }
+# get_struct = {'key_id': fields.String,
+#             'is_admin': fields.Boolean,
+#             'callsign': fields.String,
+#             'creation_time': fields.Float, # will be transmitted as unix time
+#             'satnogs_cookies' : fields.String, # will be transmitted as str and converted to binary object on webserver side (for seeding db)
+#             'email_login': fields.Nested({
+#                 'email': fields.String,
+#                 'email_passwd': fields.String
+#                 })
+#             }
 
-put_struct = {'UserID': fields.String,
-              'Password': fields.String,
-              'key_id': fields.String}
+# put_struct = {'UserID': fields.String,
+#               'Password': fields.String,
+#               'key_id': fields.String}
 
 parser = reqparse.RequestParser()
 
@@ -54,7 +50,7 @@ parser.add_argument('user_id', type=str, location='form')
 
 class manageUsers(Resource):
 
-    @marshal_with(get_struct)
+    #@marshal_with(get_struct)
     def get(self, action):
         args = parser.parse_args()
         if action == 'get_info':  
@@ -83,6 +79,7 @@ class manageUsers(Resource):
     def put(self, action):
         args = parser.parse_args()
         # for creating a user
+        print("action "+action)
         if action == 'create_user' :
             error, error_message, info = secureSql().buildUserInfo(satnogs_cookies=args.satnogs_cookies, auth_user_id=args.UserID, auth_user_passwd=args.Password, key_db_token=args.DBKey, email=args.email, email_passwd=args.email_passwd, callsign=args.callsign, create_admin=args.create_admin)
             print(error)
@@ -98,7 +95,7 @@ class manageUsers(Resource):
             if error:
                 abort(401, message=message)
             if not error:
-                return message
+                return {'message': message}
         else:
             abort(405, message="Nonexsistent action or incorrect use case.")
 
