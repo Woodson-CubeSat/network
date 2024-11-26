@@ -13,7 +13,8 @@ class authenticate(Resource):
 
     def get(self):
         args = parser.parse_args()
-        if not secureSql().authenticate(id=args.UserID, passwd=args.Password, key_db_pass=args.DBKey):
-            return 'success' # also returns code 200, or success
+        error, error_message = secureSql().authenticate(id=args.UserID, passwd=args.Password, key_db_pass=args.DBKey)
+        if not error_message:
+            return {'message': 'Successfully authenticated user.'} # also returns code 200, or success
         else:
-            abort(401, message="Invalid credentials") # code 401 means unauthorized
+            abort(401, message=error_message) # code 401 means unauthorized
