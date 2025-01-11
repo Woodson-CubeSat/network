@@ -10,7 +10,7 @@ from secrets import token_hex
 print(script_dir)
 
 
-class secureSql:
+class SecureSql:
     db_folder = "data"
     utilities_dir = "common"
     key_db_name = "keys"
@@ -26,7 +26,7 @@ class secureSql:
 
     def createUserDB(self):
         print("Creating user database...")
-        self.user_db = securesql.connect(secureSql.user_db_path)
+        self.user_db = securesql.connect(securesql.user_db_path)
         self.user_db_cursor = self.user_db.cursor()
 
         # Generate admin credentials
@@ -138,4 +138,4 @@ class secureSql:
 
 if __name__ == "__main__":
     if input("Are you sure you want to delete the database and recreate it? (y/n): ").strip().lower() == "y":
-        secureSql().migrate()
+        SecureSql().migrate()

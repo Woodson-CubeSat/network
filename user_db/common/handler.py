@@ -2,15 +2,12 @@ from secrets import token_hex
 import time
 from common.constants import script_dir
 from pysqlcipher3 import dbapi2 as securesql
-import base64
 import bcrypt
-from bcrypt import hashpw, gensalt
-from sqlite3 import Binary
 print(script_dir)
 # todo: add delete user, modify user info
 # if error=False, then no error, vice versa
 
-class secureSql:
+class SecureSql:
 
     def __init__(self):
         db_folder = "data"
@@ -21,7 +18,7 @@ class secureSql:
         self.user_db_path = f"{script_dir}/{utilities_dir}/{db_folder}/{user_db_name}.db"
 
     
-    def authenticate(self, id: str, passwd: str, key_db_pass: str, access_db: bool = False):
+    def authenticate(self, id: str, passwd: str, key_db_pass: str):
         # Connect to key database
         key_db = securesql.connect(self.key_db_path)
         key_db_cursor = key_db.cursor()
@@ -41,11 +38,11 @@ class secureSql:
                 # Fetch user database key
                 key_db_cursor.execute("""select user_db_key from keys""")
             except:
-                return True, "Database key is incorrect"
+                return True, False, "Database key is incorrect" # False is a placeholder for is_admin
             data = key_db_cursor.fetchall()
             if not data:
                 print("Key database is empty or corrupted.")
-                return True, "Key database is empty or corrupted."
+                return True,  False, "Key database is empty or corrupted." # False is a placeholder for is_admin
             user_db_key = data[0][0]
             key_db.close()
 
@@ -67,31 +64,64 @@ class secureSql:
 
             if not user_data:
                 print("Invalid username.")
-                return True, "Invalid username."
+                return True, False, "Invalid username." # False is a placeholder for is_admin
 
             stored_hash, is_admin = user_data
 
             # Use bcrypt to verify the password
             if not bcrypt.checkpw(passwd.encode(), stored_hash.encode()):
                 print("Invalid password.")
-                return True, "Invalid password." 
+                return True, False, "Invalid password." # False is a placeholder for is_admin
 
-            # If successful, return based on access_db flag
-            if access_db:
-                return user_db_key, bool(is_admin)
-            else:
-                return False, ""  # Indicating no errors
+
+            return False, bool(is_admin), ""  # Indicating no errors
 
         except Exception as e:
             key_db.close()
             return True, f"Authentication error: {e}" 
+        
+    # For internal usage only
+    def getUserDBKey(self, key_db_pass: str):
+        try:
+            # Connect to key database
+            key_db = securesql.connect(self.key_db_path)
+            key_db_cursor = key_db.cursor()
+
+            # Authenticate against the key database
+            key_db_cursor.executescript(
+                f"""
+                PRAGMA key = '{key_db_pass}';
+
+                PRAGMA cipher_compatibility = 3;
+                """
+            )
+
+            # Fetch user database key
+            key_db_cursor.execute("""SELECT user_db_key FROM keys""")
+            data = key_db_cursor.fetchall()
+
+            if not data:
+                print("Key database is empty or corrupted.")
+                return True, "Key database is empty or corrupted." 
+
+            user_db_key = data[0][0]
+            return False, user_db_key
+
+        except Exception as e:
+            print(f"Authentication error: {e}")
+            return True, "Invalid database token." 
+
+        finally:
+            # Ensure the connection is closed
+            if 'key_db' in locals():
+                key_db.close()
    
             
     def getUserInfo(
         self,
         key_db_token: str,
         user_id: str,
-        passwd: str,
+        sudo: bool, # This value is passed from the JWT to indicate the current user's administrator status
         email_login: bool = False,
         is_admin: bool = False,
         callsign: bool = False,
@@ -112,13 +142,12 @@ class secureSql:
                 }
             }
         try:
-            user_db_key, admin_check = self.authenticate(
-                id=user_id, passwd=passwd, key_db_pass=key_db_token, access_db=True
-            )
-            # In this case, user_db_key is used as an error code
-            if user_db_key == True:
-                # In this case, admin check is the error message
-                return True, admin_check, {}
+            error, user_db_key = self.getUserDBKey(key_db_pass=key_db_token)
+
+            admin_check = sudo
+            if error:
+                # In this case, user_db_key is the error message
+                return True, user_db_key
             print(user_db_key)
 
             user_db = securesql.connect(self.user_db_path)
@@ -192,9 +221,8 @@ class secureSql:
 
     def buildUserInfo(
         self,
-        satnogs_cookies,  # File in binary or hex
-        auth_user_id: str,
-        auth_user_passwd: str,
+        sudo: bool, # This value is passed from the JWT to indicate the current user's administrator status
+        satnogs_cookies,  # File in a base64 string
         key_db_token: str,
         email: str,
         email_passwd: str,
@@ -205,16 +233,13 @@ class secureSql:
         try:
             # Authenticate the user
         
-            # if authentication fails, auth function will return True and an error message
-            user_db_key, admin_user = self.authenticate(
-                id=auth_user_id, passwd=auth_user_passwd, key_db_pass=key_db_token, access_db=True
-            )
-        
-            # In this case, user_db_key is used as an error code
-            if user_db_key == True:
-                # In this case, admin user is the error message
-                return True, admin_user, {}
-            print(admin_user)
+            error, user_db_key = self.getUserDBKey(key_db_pass=key_db_token)
+            admin_user = sudo
+            
+            if error:
+                # In this case, user_db_key is the error message
+                return True, user_db_key, {}
+            print(user_db_key)
 
             if not admin_user:
                 error_message = "Authentication failed. Must be an administrator to create a new user."
@@ -267,31 +292,26 @@ class secureSql:
         
     def deleteUser(
         self,
-        auth_user_id: str,
-        auth_user_passwd: str,
+        sudo: bool,
         key_db_token: str,
         user_id: str # id of user you want to delete
         
     ):
 
-
         try:
-            #authenticate
+
+            error, user_db_key = self.getUserDBKey(key_db_pass=key_db_token)
+            admin_user = sudo
             
-            print("got here")
-            # if authentication fails, auth function will return True and an error message
-            user_db_key, admin_user = self.authenticate(
-                id=auth_user_id, passwd=auth_user_passwd, key_db_pass=key_db_token, access_db=True
-            )
-            # In this case, user_db_key is used as an error code
-            if user_db_key == True:
-                # In this case, admin user is the error message
-                return True, admin_user
+            if error:
+                # In this case, user_db_key is the error message
+                return True, user_db_key, {}
             print(user_db_key)
-            
+
             if not admin_user:
-                error = True
-                return error, "" 
+                error_message = "Must be an administrator to delete a user."
+                return True, error_message, {}
+            
             else:
                 with securesql.connect(self.user_db_path) as user_db:
                     user_db_cursor = user_db.cursor()
@@ -348,17 +368,12 @@ class secureSql:
         error_message = ""
         try:
             # Authenticate the user
-        
-            # if authentication fails, auth function will return True and an error message
-            user_db_key, admin_user = self.authenticate(
-            id=user_id, passwd=passwd, key_db_pass=key_db_token, access_db=True
-            )
-        
-            # In this case, user_db_key is used as an error code
-            if user_db_key == True:
-                # In this case, admin user is the error message
-                return True, admin_user
-            print(admin_user)
+            error, user_db_key = self.getUserDBKey(key_db_pass=key_db_token)
+            
+            if error:
+                # In this case, user_db_key is the error message
+                return True, user_db_key, {}
+            print(user_db_key)
 
             # Connect to the database
             with securesql.connect(self.user_db_path) as user_db:
@@ -374,7 +389,7 @@ class secureSql:
 
                 # callsign is the only value that can theoretically change in the users table
                 # create a list of items that have been updated for JSON response
-                updated =""
+                updated = ""
                 if callsign != None: 
                     user_db_cursor.execute(
                         """
@@ -396,7 +411,6 @@ class secureSql:
                         updated += ", "
                     updated += "email"
                 if email_passwd != None:
-                    print("got past this point")
                     login_query += "email_passwd=?"
                     login_params.append(email_passwd)
                     if updated != "":
@@ -442,8 +456,7 @@ class secureSql:
         
     def listUsers(
         self,
-        user_id: str,
-        passwd: str,
+        sudo: bool,
         key_db_token: str,
     ):
         error_message = ""
@@ -453,14 +466,14 @@ class secureSql:
             }
 
         try:
-            user_db_key, admin_check = self.authenticate(
-                id=user_id, passwd=passwd, key_db_pass=key_db_token, access_db=True
-            )
-            # In this case, user_db_key is used as an error code
-            if user_db_key == True:
-                # In this case, admin check is the error message
-                return True, admin_check, {}
+            error, user_db_key = self.getUserDBKey(key_db_pass=key_db_token)
+            admin_check = sudo
+            
+            if error:
+                # In this case, user_db_key is the error message
+                return True, user_db_key, {}
             print(user_db_key)
+
             if not admin_check:
                 return True, "You must be an administrator to list users.", {}
 

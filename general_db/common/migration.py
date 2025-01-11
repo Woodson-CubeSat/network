@@ -1,17 +1,21 @@
 import sqlite3
-from pysqlcipher3 import dbapi2 as securesql
 import getpass
-from general_db.common.constants import script_dir
+#from common.constants import script_dir
 from secrets import token_hex
+import subprocess
+script_dir = str(subprocess.check_output(["pwd"])).replace("b'", "").replace("n'", "")[:-1]
 
 
-
-class sql:
+class Sql:
     db_folder = "data"
     db_name = "data"
-    db_path = f"{script_dir}/{db_folder}/{db_name}.db"
+    db_path = f"{script_dir}/common/{db_folder}/{db_name}.db"
 
     table = ""
+
+    def __init__(self):
+        self.conn = sqlite3.connect(Sql.db_path)
+        self.cursor = self.conn.cursor()
 
     def createDB(self):
         num_gs = int(input("How many ground stations would you like to add? "))
@@ -29,16 +33,14 @@ class sql:
                 transmit.append(1)
             else:
                 transmit.append(0)
-            satnogs_compatible = getpass.getpass("Will this ground station be used with the SatNogs network? (y/n)").lower()
+            satnogs_compatible = getpass.getpass("Will this ground station be used with the SatNogs network? (y/n) ").lower()
             if satnogs_compatible == "y":
                 is_satnogs.append(1)
             else:
                 is_satnogs.append(0)
-        self.conn = sqlite3.connect(sql.db_path)
-        self.cursor = self.conn.cursor()
         self.cursor.executescript(
             """
-            DROP TABLE IF EXISTS frames;
+            DROP TABLE IF EXISTS telemtry;
 
             CREATE TABLE IF NOT EXISTS telemetry (
                 satellite integer,
@@ -55,8 +57,6 @@ class sql:
                 description string,
                 launch_date string,
                 deployment_date string,
-                deframer string,
-                decoder string,
                 countries string,
                 in_orbit int, 
                 tracking_id int
@@ -87,20 +87,17 @@ class sql:
                 """)
 
         self.conn.commit()
+        self.conn.close()
 
     def migrate(self):
         self.createDB()
 
-    def __del__(self):
-        self.conn.close()
+    # def __del__(self):
+    #     self.conn.close()
 
 
 if __name__ == "__main__":
     if input("Are you sure you want to delete the database and recreate it? (y/n) ").strip() == "y":
-        sql().migrate()
+        Sql().migrate()
 
-# Checklist
 
-# fix SQL get and append
-# change DBCheck and update_frames to work with new DB system
-# HI POOKIE DOOKIE BOOKIE BEAR

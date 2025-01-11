@@ -123,7 +123,7 @@ def updateTelemetry(norad_id: int, start_time: str, end_time: str, satnogs_api_t
     response = requests.get(url=sat_url, headers={"Authorization": "Token" + satnogs_api_token})
 
     if response.json()[0]["status"] != "alive":
-        handler.sql().notInOrbit(norad_id)
+        handler.Sql().notInOrbit(norad_id)
         quit
 
     while try_again:
@@ -310,15 +310,16 @@ def updateTelemetry(norad_id: int, start_time: str, end_time: str, satnogs_api_t
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Update frames for a satellite using NORAD ID.")
-    parser.add_argument("norad_id", type=int, help="NORAD ID of the satellite")
-    parser.add_argument("update_duration", type=int, help="The span of days the satellite will fetch frames from. Going over a week or two is not reccomended.")
-    parser.add_argument("offset", type=int, help="The date offset used to calculate timestamps. Going over a week or two is not recommended.")
-    parser.add_argument("key_id", type=str, help="This argument contains the key ID used to access a satnogs key, which will be utilized by this script.")
+    parser.add_argument("--norad_id", type=int, help="NORAD ID of the satellite")
+    parser.add_argument("--update_duration", type=int, help="The span of days the satellite will fetch frames from. Going over a week or two is not reccomended.")
+    parser.add_argument("--offset", type=int, help="The date offset used to calculate timestamps. Going over a week or two is not recommended.")
+    parser.add_argument("--key_id", type=str, help="This argument contains the key ID used to access a satnogs key, which will be utilized by this script.")
+
     args = parser.parse_args()
     print("Generating timestamps")
     start_time, end_time = genTimestamps(update_duration=args.update_duration, offset=args.offset)
     print(f"Fetching frames from {start_time} to {end_time}")
-    key_id = handler.sql().getKey(key_id=args.key_id)
+    key_id = handler.Sql().getKey(key_id=args.key_id, satnogs_key=True)
     norad_ids, timestamps, frames, stations = updateTelemetry(norad_id=args.norad_id, start_time=start_time, end_time=end_time, satnogs_api_token=key_id)
     if not os.path.exists(f"{script_dir}/logs/update_frames.log"):
         with open(f"{script_dir}logs/update_frames.log", "w") as logfile:
@@ -335,7 +336,7 @@ if __name__ == "__main__":
         with open(f"{script_dir}/logs/update_frames.log", "a") as logfile:
             logfile.write(f"\n{datetime.datetime.now()}: Appending frames DB.")
     print("Appending frames to DB")
-    handler.sql().appendTelemetry(norad_ids=norad_ids, timestamps=timestamps, frames=frames, stations=stations)
+    handler.Sql().appendTelemetry(norad_ids=norad_ids, timestamps=timestamps, frames=frames, stations=stations)
     if not os.path.exists(f"{script_dir}/logs/update_frames.log"):
         with open(f"{script_dir}logs/update_frames.log", "w") as logfile:
             logfile.write(f"\n{datetime.datetime.now()}: Succesfully retrieved and appended frames in the span of {start_time} to end {end_time}.")
