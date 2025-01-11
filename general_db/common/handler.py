@@ -1,69 +1,310 @@
+from common.constants import script_dir
+from secrets import token_hex
+from common.webbot import Webbot
+from common.constants import NORAD_DECODERS
 import time
 import sqlite3
 import os
 import csv
 import calendar
 import requests
-import general_db.common.mail as mail
+import common.mail as mail
 import subprocess
-import os
 import datetime
-import operator
-from general_db.common.constants import script_dir
+import sys
+import binascii
+import json
+import importlib.util
+import zipfile
 
 
-script_dir = str(subprocess.check_output(["pwd"])).replace("b'", "").replace("n'", "")[:-1]
+def telemetryToZip(norad_id, telemetry_data):
+        # Ensure the telemetry_cache folder exists
+        telemetry_cache_dir = os.path.join('telemetry_cache')
+        if not os.path.exists(telemetry_cache_dir):
+            os.makedirs(telemetry_cache_dir)
 
+        # Create a JSON file for the telemetry data
+        json_file_name = f"{norad_id}_frames_{time.time()}.json"
+        json_file_path = os.path.join(telemetry_cache_dir, json_file_name)
+
+        # Save the telemetry data as a JSON file
+        with open(json_file_path, 'w') as json_file:
+            json.dump(telemetry_data, json_file, indent=4)
+
+        # Now, create a zip file containing the JSON file
+        zip_file_name = f"{norad_id}_frames_{time.time()}.zip"
+        zip_file_path = os.path.join(telemetry_cache_dir, zip_file_name)
+
+        # Create a zip file and add the JSON file
+        with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(json_file_path, json_file_name)  # Add the JSON file to the zip
+
+        # Delete the JSON file after creating the zip file
+        os.remove(json_file_path)
+
+        # Return the URL to the zip file
+        return f"/download_telemetry/{zip_file_name}"
+
+
+
+
+# script_dir = str(subprocess.check_output(["pwd"])).replace("b'", "").replace("n'", "")[:-1]
+
+csv.field_size_limit(100000000000000)
 
 # todo: add delete satellite, add ground station, delete ground station
 
 def readCSV(norad_id: int):
+    """
+    Reads the CSV file for the given NORAD ID, extracts the timestamps, frames, and station names,
+    and returns them as lists. The file is deleted after processing.
+
+    :param norad_id: The NORAD ID for which the data is stored in a CSV file.
+    :return: Three lists: timestamps, frames, and station names, processed from the CSV file.
+    """
     timestamps_raw = []
     frames_raw = []
+    stations_raw = []  # To store the station names
     timestamps = []
     frames = []
-    # opening the CSV file
-    with open(f"{script_dir}/csv_cache/{norad_id}data.csv", mode="r") as file:
-        # reading the CSV file
-        csvFile = csv.reader(file)
+    stations = []  # Final list for station names
 
-        # displaying the contents of the CSV file
-        for line in csvFile:
-            str_line = line[0]
-            split_line = str_line.split("|")
-            timestamp = str(calendar.timegm(time.strptime(split_line[0], "%Y-%m-%d %H:%M:%S")))  # fix this to use zulu time
-            timestamps_raw.append(timestamp)
-            frames_raw.append(split_line[1])
-        # remove duplicates
-        for i in range(len(frames_raw) - 1):
-            frames.append(frames_raw[i])
-            timestamps.append(timestamps_raw[i])
-    print(len(timestamps_raw))
-    print(len(timestamps))
-    # reverse lists to it can go from end time to start time
-    timestamps.reverse()
-    frames.reverse()
-    os.remove(f"{script_dir}/csv_cache/{norad_id}data.csv")
+    # Construct file path
+    file_path = f"{script_dir}/common/csv_cache/{norad_id}data.csv"
 
-    return timestamps, frames
+    try:
+        # Open the CSV file for reading
+        with open(file_path, mode="r") as file:
+            print("Successfully opened the file")
+            csvFile = csv.reader(file)
+
+            # Read each line in the CSV
+            for line in csvFile:
+                # Split line by pipe (|) separator
+                str_line = line[0]
+                split_line = str_line.split("|")
+
+                # Extract the timestamp, frame, and station name
+                try:
+                    timestamp = str(calendar.timegm(time.strptime(split_line[0], "%Y-%m-%d %H:%M:%S")))
+                    # Check if station value exists
+                    station = split_line[3] if len(split_line) > 3 and split_line[3] else None
+                    #print(station)
+                except ValueError:
+                    print(f"Invalid timestamp or data format in line: {str_line}")
+                    continue  # Skip lines with invalid timestamps or data
+
+                # Append parsed data
+                timestamps_raw.append(timestamp)
+                frames_raw.append(split_line[1])
+                stations_raw.append(station)  # Add station name to the raw list
+
+            # Delete the CSV file after processing
+            os.remove(file_path)
+            
+            # Process the raw data into final lists
+            for i in range(len(frames_raw)):
+                frames.append(frames_raw[i])
+                timestamps.append(timestamps_raw[i])
+                stations.append(stations_raw[i])  # Add station name to the final list
+
+            # Reverse lists to go from the most recent to the earliest
+            timestamps.reverse()
+            frames.reverse()
+            stations.reverse()  # Reverse the station list as well
+
+        print(f"Processed {len(timestamps_raw)} timestamps, {len(frames_raw)} frames, and {len(stations_raw)} stations.")
+
+        print(f"File {file_path} deleted after processing.")
+
+    except FileNotFoundError:
+        print(f"Error: File {file_path} not found.")
+        return [], [], []  # Return empty lists in case of error
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return [], [], []  # Return empty lists in case of error
+    print(frames[146], timestamps[146], stations[146]) 
+
+    return timestamps, frames, stations  # Return all three lists
 
 
+def setupCronJob(norad_id, key_id, update_duration=7, offset=7):
+        
+        script_path = f"{script_dir}/common/update_frames.py"
 
-class sql:
+        """
+        Configures a cron job to run the given script one week from now and repeat weekly.
+        
+        Args:
+            script_path (str): Full path to the Python script to execute.
+            norad_id (int): NORAD ID of the satellite.
+            update_duration (int): The span of days to fetch frames. Defaults to 7.
+            offset (int): The date offset used to calculate timestamps. Defaults to 7.
+            key_id (str): Key ID for SatNOGS access.
+        """
+        if not os.path.isfile(script_path):
+            raise FileNotFoundError(f"The script '{script_path}' does not exist.")
+
+        # Get the Python executable path for the current version
+        python_path = sys.executable
+
+        # Calculate start time one week from now
+        start_time = datetime.datetime.now() + datetime.timedelta(weeks=1)
+        minute = start_time.minute
+        hour = start_time.hour
+        day_of_week = start_time.weekday()  # Monday = 0, Sunday = 6
+
+        # Build the script command with named arguments
+        script_command = (
+            f"{python_path} {script_path} --norad_id={norad_id} "
+            f"--update_duration={update_duration} --offset={offset} --key_id={key_id}"
+        )
+
+        # Generate the cron command
+        cron_command = f"{minute} {hour} * * {day_of_week} {script_command}"
+
+        try:
+            # Get existing crontab
+            result = subprocess.run(["crontab", "-l"], capture_output=True, text=True, check=True)
+            current_crontab = result.stdout.strip()
+        except subprocess.CalledProcessError:
+            # If crontab is empty or doesn't exist, initialize an empty one
+            current_crontab = ""
+
+        # Check if the cron job already exists
+        if cron_command in current_crontab:
+            print("Cron job already exists. No changes made.")
+            return
+
+        # Append the new cron job
+        new_crontab = current_crontab + f"\n{cron_command}\n" if current_crontab else f"{cron_command}\n"
+
+        try:
+            # Write the updated crontab
+            subprocess.run(["crontab", "-"], input=new_crontab, text=True, check=True)
+            print(f"Cron job added: {cron_command}")
+        except subprocess.CalledProcessError as e:
+            print("Failed to update crontab:", e)
+            raise RuntimeError("Failed to update the crontab.") from e
+
+# def compileDecoder()
+        
+def loadDecoder(norad_id):
+    try:
+        # Check if the NORAD ID exists in the dictionary
+        print(NORAD_DECODERS)
+        print(NORAD_DECODERS[46287])
+        
+        if norad_id not in NORAD_DECODERS:
+            raise ValueError(f"No decoder found for NORAD ID: {norad_id}")
+
+        # Get the decoder module name from the dictionary
+        decoder_module_name = NORAD_DECODERS[norad_id]
+
+        # Create the file path based on the module name (e.g., "Amicalsat" -> "amicalsat.py")
+        file_name = f"{decoder_module_name[0].lower()}{decoder_module_name[1:]}.py"  # Lowercase the first letter of the module name
+        module_name = decoder_module_name  # This will be used for the import
+
+        # Assuming all decoder files are in a 'decoders' directory
+        decoder_file_path = f"{script_dir}/common/decoders/{file_name}"
+        print(decoder_file_path)
+
+        # Check if the decoder file exists
+        if not os.path.exists(decoder_file_path):
+            raise FileNotFoundError(f"Decoder file '{file_name}' not found for NORAD ID: {norad_id}")
+
+        # Dynamically import the module
+        spec = importlib.util.spec_from_file_location(module_name, decoder_file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        # Access the class from the module
+        decoder_class = getattr(module, decoder_module_name)
+
+        # Return the loaded class
+        return False, decoder_class, ""
+
+    except (ModuleNotFoundError, FileNotFoundError) as e:
+        return True, "", f"Error loading module for NORAD ID {norad_id}: {str(e)}"
+    except Exception as e:
+        print(f"Error: {e}")
+        return True, "", f"An error occured: {e}", {}
+
+def kaitaiToDict(obj):
+    try:
+        """Recursively converts a Kaitai Struct object to a Python dictionary."""
+        if hasattr(obj, "__dict__"):
+            result = {}
+            for key, value in obj.__dict__.items():
+                if not key.startswith('_'):
+                    if hasattr(value, 'switch_on_field') and hasattr(value, 'cases'):
+                        switch_value = getattr(value, 'switch_on_field')
+                        for case_value, case_type in value.cases.items():
+                            if switch_value == case_value:
+                                result[key] = kaitaiToDict(getattr(value, case_type))
+                                break
+                    elif isinstance(value, list):
+                        result[key] = [kaitaiToDict(item) for item in value]
+                    elif hasattr(value, 'bitfield_field'):
+                        bitfield = getattr(value, 'bitfield_field')
+                        result[key] = ''.join(f'{bitfield:08b}')
+                    elif hasattr(value, 'ror_field'):
+                        ror_value = getattr(value, 'ror_field')
+                        result[key] = (ror_value >> 1) | ((ror_value & 1) << 7)
+                    else:
+                        result[key] = kaitaiToDict(value)
+        elif isinstance(obj, bytes):
+            result = binascii.hexlify(obj).decode("utf-8")
+        elif isinstance(obj, (int, str)):
+            result = obj
+        else:
+            result = str(obj)
+        
+        return result 
+    except Exception as e:
+        return {"message": f"Error converting Kaitai object: {e}"}
+    
+def parseFrame(norad_id, telemetry, decode_frames: bool = False):
+    error, DecoderClass, message = loadDecoder(norad_id)
+    if error:
+        return True, message
+        
+    for i in range(len(telemetry)):
+            if not decode_frames:
+                del telemetry[i]["decoded_frame"]
+            if decode_frames:
+                print(i)
+                hex_frame=telemetry[i]["raw_frame"]
+                # Convert hex string to binary
+                binary_frame = binascii.unhexlify(hex_frame)
+                # Decode the frame data
+                try:
+                    kaitai_obj = DecoderClass.from_bytes(binary_frame)
+                except:
+                    telemetry[i]["decoded_frame"] = {"message": "Frame could not be parsed."}
+
+                telemetry[i]["decoded_frame"] = kaitaiToDict(kaitai_obj)
+    return False, telemetry
+
+
+class Sql:
     db_folder = "data"
     db_name = "data"
-    db_path = f"{script_dir}/{db_folder}/{db_name}.db"
+    utilities_folder = "common"
+    db_path = f"{script_dir}/{utilities_folder}/{db_folder}/{db_name}.db"
 
     def __init__(self):
-        self.conn = sqlite3.connect(sql.db_path)
+        print(Sql.db_path)
+        self.conn = sqlite3.connect(Sql.db_path)
         self.cursor = self.conn.cursor()
 
     table = ""
 
 
-    def getTelemetry(self, norad_id: int, start_time: int = None, end_time: int = None, station: str = None, return_metadata: bool = False):
+    def getTelemetry(self, norad_id: int = None, start_time: int = None, end_time: int = None, station: str = None, return_metadata: bool = False):
         telemetry = []
-        query = "SELECT * FROM frames WHERE 1=1"  # Base query
+        query = "SELECT * FROM telemetry WHERE 1=1"  # Base query
         params = []
 
         try:
@@ -92,161 +333,262 @@ class sql:
             for row in data:
                 timestamp = int(row[1])  # Assuming the timestamp is in the second column
                 if return_metadata:
-                    telemetry.append([row[0], timestamp, row[2], row[3]])  # Append all metadata
+                    # order: norad_id, timestamp, frames, station
+                    telemetry.append({'norad_id': row[0], 'timestamp': timestamp, 'raw_frame': row[2], 'station': row[3], 'decoded_frame': None})  # Append all metadata
                 else:
-                    telemetry.append([timestamp, row[2]])  # Append limited data
+                    telemetry.append({'timestamp': timestamp, 'raw_frame': row[2], 'decoded_frame': None})  # Append limited data
 
             # Handle no errors found
             if telemetry:
                 # Sort telemetry by timestamp (index 1 for metadata, index 0 otherwise)
-                telemetry.sort(key=operator.itemgetter(1) if return_metadata else operator.itemgetter(0))
+                #telemetry.sort(key=operator.itemgetter(1) if return_metadata else operator.itemgetter(0))
+                telemetry.sort(key=lambda x: x['timestamp'])
 
                 # Convert timestamps to human-readable format
                 for i in range(len(telemetry)):
-                    if return_metadata:
-                        telemetry[i][1] = datetime.datetime.utcfromtimestamp(telemetry[i][1]).strftime("%Y-%m-%d %H:%M:%S")
-                    else:
-                        telemetry[i][0] = datetime.datetime.utcfromtimestamp(telemetry[i][0]).strftime("%Y-%m-%d %H:%M:%S")
+                    # if return_metadata:
+                    telemetry[i]["timestamp"] = datetime.datetime.utcfromtimestamp(telemetry[i]["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+                    # else:
+                    #     telemetry[i][0] = datetime.datetime.utcfromtimestamp(telemetry[i][0]).strftime("%Y-%m-%d %H:%M:%S")
+            
+            print(telemetry)
+            return False, "Successfully retrived telemetry",  telemetry
 
         except Exception as e:
             print(f"Error: {e}")
-            telemetry = 1  # Placeholder error handling, update with proper DB error codes
+            return True, f"An error occured: {e}", {}
+        finally:
+            # Ensure the database connection is closed
+            if self.conn:
+                self.conn.close()
 
-        print(telemetry)
-        return telemetry
-
-
+        
     def getSatInfo(
         self,
+        # filters for query
         norad_id: int = None,
         name: str = None,
-        deframer: str = None,
         country: str = None,
+        # filters for returning information
         return_all: bool = True,
-        return_deframer: bool = False,
         return_launchinfo: bool = False,
-        return_decoder: bool = False,
         return_name: bool = False,
         return_id: bool = False,
         return_description: bool = False,
     ):
         try:
-            if norad_id != None and name == None and deframer == None and country == None:
-                self.cursor.execute(f"""SELECT * FROM satellites WHERE norad_id={norad_id}""")
-                data = self.cursor.fetchall()
-            if name != None and norad_id == None and deframer == None and country == None:
-                self.cursor.execute(f"""SELECT * FROM satellites WHERE name={name}""")
-                data = self.cursor.fetchall()
-            if name == None and norad_id == None and deframer != None and country == None:
-                self.cursor.execute(f"""SELECT * FROM satellites WHERE deframer={deframer}""")
-                data = self.cursor.fetchall()
-            if name == None and norad_id == None and deframer == None and country != None:
-                self.cursor.execute(f"""SELECT * FROM satellites WHERE country LIKE "%{country}%" """)
-                data = self.cursor.fetchall()
+            # Base query and parameters for filtering
+            query = "SELECT * FROM satellites WHERE 1=1"
+            params = []
 
-            if return_all and not return_deframer and not return_launchinfo and not return_decoder and not return_name and not return_id and not return_description:
-                info = []
-                for i in range(len(data)):
-                    info.append([data[i][0], data[i][1], data[i][2], data[i][3], data[i][4], data[i][5], data[i][6], data[i][7]])
-                print(info)
-            if return_deframer and not return_all and not return_launchinfo and not return_decoder and not return_name and not return_id and not return_description:
-                info = []
-                for i in range(len(data)):
-                    info.append([data[i][5]])
-                print(info)
-            if return_launchinfo and not return_deframer and not return_all and not return_decoder and not return_name and not return_id and not return_description:
-                info = []
-                for i in range(len(data)):
-                    info.append([data[i][3], data[i][4]])
-                print(info)
-            if return_decoder and not return_deframer and not return_all and not return_launchinfo and not return_name and not return_id and not return_description:
-                info = []
-                for i in range(len(data)):
-                    info.append([data[i][6]])
-                print(info)
-            if return_name and not return_deframer and not return_all and not return_launchinfo and not return_decoder and not return_id and not return_description:
-                info = []
-                for i in range(len(data)):
-                    info.append([data[i][1]])
-                print(info)
-            if return_id and not return_deframer and not return_all and not return_launchinfo and not return_decoder and not return_name and not return_description:
-                info = []
-                for i in range(len(data)):
-                    info.append([data[i][0]])
-                print(info)
-            if return_description and not return_deframer and not return_all and not return_launchinfo and not return_decoder and not return_name and not return_id:
-                info = []
-                for i in range(len(data)):
-                    info.append([data[i][2]])
-                print(info)
+            # Add filters
+            if norad_id is not None:
+                query += " AND norad_id = ?"
+                params.append(norad_id)
+            if name is not None:
+                query += " AND name = ?"
+                params.append(name)
+            if country is not None:
+                query += " AND country LIKE ?"
+                params.append(f"%{country}%")
 
-        except:
-            info = 1
+            # Execute query
+            self.cursor.execute(query, params)
+            data = self.cursor.fetchall()
 
-    def appendTelemetry(self, norad_id: int, timestamps: list, frames: list, stations: list = [None]):
-        if stations[0] == None:
-            stations = []
-            for i in range(len(timestamps)): #- 1):
-                stations.append(None)
+            # Define columns to return
+            if return_all:
+                result = data
+            else:
+                columns = []
+                if return_launchinfo:
+                    columns.extend([3, 4])  # launch info column indices
+                if return_name:
+                    columns.append(1)  # name column index
+                if return_id:
+                    columns.append(0)  # ID column index
+                if return_description:
+                    columns.append(2)  # description column index
 
-        print(stations)
-        for i in range(len(frames)): # - 1):
-            print(norad_id)
-            print(timestamps[i])
-            print(frames[i])
-            print(stations[i])
-            self.cursor.execute(
+                # Filter data based on selected columns
+                result = [[row[col] for col in columns] for row in data]
+
+            # Return success response
+            return False, "Query executed successfully.", result
+
+        except Exception as e:
+            # Return error response
+            return True, f"An error occurred: {e}", {}
+
+        finally:
+            # Ensure the database connection is closed
+            if self.conn:
+                self.conn.close()
+          
+
+
+    def appendTelemetry(self, norad_id: int, timestamps: list, frames: list, stations: list = None):
+        try:
+            # If stations is not provided, create a list with None for each timestamp
+            if stations is None:
+                stations = [None] * len(timestamps)
+
+            #print(stations)
+            updated_list = []
+        
+            # Prepare a list of tuples for the insert operation (to do it in bulk later)
+            insert_data = [
+                (int(norad_id), int(timestamps[i]), frames[i], str(stations[i]))
+                for i in range(len(frames))
+            ]
+        
+            # Use a bulk insert to reduce the number of commits
+            self.cursor.executemany(
                 """INSERT INTO telemetry (satellite, timestamp, frame, station) VALUES (?, ?, ?, ?)""",
-                (int(norad_id), int(timestamps[i]), frames[i], str(stations[i])),
+                insert_data
             )
-            print(timestamps[i], frames[i], stations[i])
+            # Commit the transaction after all the insertions
+            self.conn.commit()
+        
+            # Store the updated list for logging or further use
+            updated_list.extend(insert_data)
+        
+            print("Bulk insert complete.")
 
-        self.conn.commit()
+            # time taken will be processed in general.py
+            return False, "Success.", {'time_taken': time.time(), 'frame_count': len(frames)}
 
-    def appendSatellite(
-        self, norad_id: int, name: str, description: str = None, launch_date: str = None, deployment_date: str = None, deframer: str = None, decoder: str = None, countries: str = None, tracking_id: int = None
+        except Exception as e:
+            return True, f"An error occurred: {e}", {}
+    
+        finally:
+            # Close the connection if it exists
+            if self.conn:
+                self.conn.close()
+    
+    def appendKeys(self, key_id, n2yo_key, satnogs_key):
+        try:
+            self.cursor.execute(
+                """INSERT INTO keys (key_id, satnogs_key, n2yo_key) VALUES (?, ?, ?)""",
+                (key_id, n2yo_key, satnogs_key),
+            )
+            print(key_id, n2yo_key, satnogs_key)
+            self.conn.commit()
+
+            return False, f"Successfully added keys for ID {key_id}."
+
+        except Exception as e:
+            print(f"Error: {e}")
+            return True, f"An error occured: {e}"
+        finally:
+            # Ensure the database connection is closed
+            if self.conn:
+                self.conn.close()
+
+    def addSatellite(
+        self, norad_id: int, name: str, description: str = None, launch_date: str = None, deployment_date: str = None, countries: str = None
     ):
-        # get rid of spaces
-        self.cursor.execute(
-            """INSERT INTO satellites (norad_id, name, description, launch_date, deployment_date, deframer, decoder, countries, tracking_id, in_orbit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)""",
-            (norad_id, name, description, launch_date, deployment_date, deframer, decoder, countries, tracking_id),
-        )
-        print(norad_id, name, description, launch_date, deployment_date, decoder, countries, tracking_id)
-        self.conn.commit()
+        try: 
+            # get rid of spaces
+            self.cursor.execute(
+                """INSERT INTO satellites (norad_id, name, description, launch_date, deployment_date, countries, in_orbit) VALUES (?, ?, ?, ?, ?, ?, 1)""",
+                (norad_id, name, description, launch_date, deployment_date, countries),
+            )
+            print(norad_id, name, description, launch_date, deployment_date, countries)
+            self.conn.commit()
+
+            return False, "Successfully added satellite information to database."
+        except Exception as e:
+            print(f"Error: {e}")
+            return True, f"An error occured: {e}"
+        finally:
+            # Ensure the database connection is closed
+            if self.conn:
+                self.conn.close()
 
     def notInOrbit(self, norad_id: int):
         self.cursor.execute(f"""UPDATE satellites SET in_orbit=0 WHERE norad_id={norad_id}""")
         #add stuff to remove update command from cron file later
 
-    def buildTelemetry(norad_id: int, email: str, passwd: str):
-        print("clicking link\n")
-        webbot.clicker(norad_id)
-        print("fetching link\n")
-        link = mail.fetch(email, passwd)
-        print("downloading csv\n")
-        mail.download(link, norad_id)
-        print("reading csv\n")
-        timestamps, frames = readCSV(norad_id)
-        print(timestamps)
-        print("done reading\n")
-        print("appending to sql db\n")
-        sql().appendTelemetry(norad_id=norad_id, timestamps=timestamps, frames=frames)
-        print("finished")
+    # helper function for addSatellite()
+    def buildTelemetry(self, norad_id: str, satnogs_cookies: str, email: str, email_passwd: str):
+        print(norad_id)
+        try:
+            webbot = Webbot()
+            print("clicking link\n")
+            webbot.clicker(norad_id, satnogs_cookies)
+            print("fetching link\n")
+            link = mail.fetchLinks(email, email_passwd)
+            print("downloading csv\n")
+            mail.download(link, norad_id)
+            print("reading csv\n")
+            timestamps, frames, stations = readCSV(norad_id)
+            print(timestamps)
+            print("done reading\n")
+            print("appending to sql db\n")
+            error, message, info = Sql().appendTelemetry(norad_id=norad_id, timestamps=timestamps, frames=frames, stations=stations)
+            print("finished")
+        except Exception as e:
+            print(f"Error: {e}")
+            return True, f"An error occured: {e}", {}
+        if not error:
+            message = "Successfully added satellite telemetry."
+        return error, message, info
 
-    def getTrackerInfo(self, station_id: str):
+    # helper function for pass scheduler function, check notebook for details
+    # this data will not leave the general db container/server, and will not be transmitted over the api
+    # therefore, it will not be converted into json
+    def getTrackerInfo(self, station_id: str = None):
+        if station_id == None:
+            station_id = "*"
         self.cursor.execute(f"""select lat, lng, alt from groundstations where station_id=?""", (station_id,))
         data = self.cursor.fetchall()
-        info = [data[0][0], data[0][1], data[0][2]]
+        for row in data:
+            info = [data[0][0], data[0][1], data[0][2]]
     
+    # this data will not leave the general db container/server, and will not be transmitted over the api
+    # therefore, it will not be converted into json
+    # helper function for update_frames, and pass scheduler function (not started yet)
     def getKey(self, key_id: str, satnogs_key: bool = False, n2yo_key: bool = False):
-        if satnogs_key:
-            self.cursor.execute(f"""select satnogs_key from keys where key_id=?""", (key_id,))
-            data = self.cursor.fetchall()
-            info = [data[0][0]]
-        if n2yo_key:
-            self.cursor.execute(f"""select n2yo_key from keys where key_id=?""", (key_id,))
-            data = self.cursor.fetchall()
-            info = [data[0][0]]
+        try:
+            if satnogs_key:
+                self.cursor.execute(f"""select satnogs_key from keys where key_id=?""", (key_id,))
+                data = self.cursor.fetchall()
+                info = data[0][0]
+            if n2yo_key:
+                self.cursor.execute(f"""select n2yo_key from keys where key_id=?""", (key_id,))
+                data = self.cursor.fetchall()
+                info = data[0][0]
+            return info
+        except Exception as e:
+            print(f"Error: {e}") # Change this to use log file
+        finally:
+            # Ensure the database connection is closed
+            if self.conn:
+                self.conn.close()
+
+    def addGroundstation(
+                self,
+                name: str,
+                lat: float,
+                lng: float,
+                alt: float,
+                transmit: bool,
+                satnogs: bool
+        ):
+            try:
+
+                self.cursor.execute(
+                    """INSERT INTO groundstations (station_id, name, lat, lng, alt, transmit, satnogs) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (token_hex(4), name, lat, lng, alt, int(transmit), int(satnogs)),
+                )
+                self.conn.commit()
+                return False, "Successfully added groundstation."
+            except Exception as e:
+                print(f"Error: {e}")
+                return True, f"An error occured: {e}"
+        
+        
 
     # def buildSatInfoTest(self, norad_id: int, satnogs_key):
     #     decoders = [None]
@@ -296,18 +638,29 @@ class sql:
     #         norad_id=norad_id, description=description, launch_date=launch_date, deployment_date=deployment_date, deframer=deframer, decoder=decoder, countries=data["countries"], name=data["name"]
     #     )
 
-    def buildSatInfo(norad_id, description, launch_date, deployment_date, deframer, decoder, tracking_id,  satnogs_key):
-        url = f"https://db-dev.satnogs.org/api/satellites/?norad_cat_id={norad_id}"
-        response = requests.get(url=url, headers={"Authorization": f"Token{satnogs_key}"})
-        data = response.json()[0]
+    def buildSatInfo(self, satnogs_key, norad_id: int, description: str = None, launch_date: str = None, deployment_date: str = None
+        ):
+        try:
+            url = f"https://db-dev.satnogs.org/api/satellites/?norad_cat_id={norad_id}"
+            response = requests.get(url=url, headers={"Authorization": f"Token{satnogs_key}"})
+            data = response.json()[0]
 
-        description = f"User Entry: {description} \n\n Website: {data['website']}"
-        sql().appendSatellite(
-            norad_id=norad_id, description=description, launch_date=launch_date, deployment_date=deployment_date, deframer=deframer, decoder=decoder, countries=data["countries"], name=data["name"], tracking_id=tracking_id
-        )
+            description = f"User Entry: {description} \n\n Website: {data['website']}"
+            Sql().addSatellite(
+                norad_id=norad_id, description=description, launch_date=launch_date, deployment_date=deployment_date, countries=data["countries"], name=data["name"]
+                )
+            
+            return False, "Successfully added satellite information to database."
+        
+        except Exception as e:
+            print(f"Error: {e}")
+            return True, f"An error occured: {e}"
+
+
 
     def __del__(self):
         self.conn.close()
+
 
 
 
