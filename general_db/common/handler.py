@@ -44,7 +44,7 @@ def telemetryToZip(norad_id, telemetry_data):
         os.remove(json_file_path)
 
         # Return the URL to the zip file
-        return f"/download_telemetry/{zip_file_name}"
+        return zip_file_name
 
 
 
@@ -71,7 +71,7 @@ def readCSV(norad_id: int):
     stations = []  # Final list for station names
 
     # Construct file path
-    file_path = f"{script_dir}/common/csv_cache/{norad_id}data.csv"
+    file_path = f"{script_dir}/common/csv_cache/{norad_id}_data.csv"
 
     try:
         # Open the CSV file for reading
@@ -187,7 +187,49 @@ def setupCronJob(norad_id, key_id, update_duration=7, offset=7):
         except subprocess.CalledProcessError as e:
             print("Failed to update crontab:", e)
             raise RuntimeError("Failed to update the crontab.") from e
+        
+def deleteCronJob(norad_id):
+    """
+    Deletes the cron job associated with the given NORAD ID.
 
+    Args:
+        norad_id (int): NORAD ID of the satellite.
+        script_dir (str): Directory where the script is located.
+    """
+    script_path = f"{script_dir}/common/update_frames.py"
+    python_path = sys.executable
+
+    # Construct the command part to identify the cron job
+    script_command = f"{python_path} {script_path} --norad_id={norad_id}"
+
+    try:
+        # Get the current crontab
+        result = subprocess.run(["crontab", "-l"], capture_output=True, text=True, check=True)
+        current_crontab = result.stdout.strip()
+    except subprocess.CalledProcessError:
+        print("No existing crontab found.")
+        return
+
+    # Split the crontab into individual lines
+    cron_lines = current_crontab.split("\n")
+
+    # Filter out lines containing the specific script command
+    updated_cron_lines = [line for line in cron_lines if script_command not in line]
+
+    # Check if any lines were removed
+    if len(cron_lines) == len(updated_cron_lines):
+        print(f"No cron job found for NORAD ID {norad_id}.")
+        return
+
+    # Join the remaining lines and update the crontab
+    new_crontab = "\n".join(updated_cron_lines)
+
+    try:
+        subprocess.run(["crontab", "-"], input=new_crontab, text=True, check=True)
+        print(f"Cron job for NORAD ID {norad_id} has been deleted.")
+    except subprocess.CalledProcessError as e:
+        print("Failed to update crontab:", e)
+        raise RuntimeError("Failed to update the crontab.") from e
 # def compileDecoder()
         
 def loadDecoder(norad_id):
@@ -226,10 +268,10 @@ def loadDecoder(norad_id):
         return False, decoder_class, ""
 
     except (ModuleNotFoundError, FileNotFoundError) as e:
-        return True, "", f"Error loading module for NORAD ID {norad_id}: {str(e)}"
+        return True, f"Error loading module for NORAD ID {norad_id}: {str(e)}", ""
     except Exception as e:
         print(f"Error: {e}")
-        return True, "", f"An error occured: {e}", {}
+        return True, f"An error occured: {e}",""
 
 def kaitaiToDict(obj):
     try:
@@ -266,9 +308,10 @@ def kaitaiToDict(obj):
         return {"message": f"Error converting Kaitai object: {e}"}
     
 def parseFrame(norad_id, telemetry, decode_frames: bool = False):
-    error, DecoderClass, message = loadDecoder(norad_id)
-    if error:
-        return True, message
+    if decode_frames:
+        error, DecoderClass, message = loadDecoder(norad_id)
+        if error:
+            return True, message
         
     for i in range(len(telemetry)):
             if not decode_frames:
@@ -536,6 +579,7 @@ class Sql:
         return error, message, info
 
     # helper function for pass scheduler function, check notebook for details
+    # Not finished
     # this data will not leave the general db container/server, and will not be transmitted over the api
     # therefore, it will not be converted into json
     def getTrackerInfo(self, station_id: str = None):
@@ -643,8 +687,12 @@ class Sql:
         try:
             url = f"https://db-dev.satnogs.org/api/satellites/?norad_cat_id={norad_id}"
             response = requests.get(url=url, headers={"Authorization": f"Token{satnogs_key}"})
-            data = response.json()[0]
 
+            try:
+                data = response.json()[0]
+                print("response:",response.json()[0])
+            except:
+                data = {'countries': None, 'name': None, 'website': None}
             description = f"User Entry: {description} \n\n Website: {data['website']}"
             Sql().addSatellite(
                 norad_id=norad_id, description=description, launch_date=launch_date, deployment_date=deployment_date, countries=data["countries"], name=data["name"]
@@ -655,6 +703,32 @@ class Sql:
         except Exception as e:
             print(f"Error: {e}")
             return True, f"An error occured: {e}"
+        
+    def deleteSatellite(self, norad_id):
+        try: 
+            # get rid of spaces
+            self.cursor.execute(
+                """DELETE FROM satellites WHERE norad_id = ? """,
+                (norad_id,)
+            )
+            self.cursor.execute(
+                """DELETE FROM telemetry WHERE satellite = ? """,
+                (norad_id,)
+            )
+            print(norad_id)
+            self.conn.commit()
+
+            deleteCronJob(norad_id)
+
+            print(f"Successfully deleted satellite {norad_id} and its corresponding telemetry from the database.")
+            return False, f"Successfully deleted satellite {norad_id} and its corresponding telemetry from the database."
+        except Exception as e:
+            print(f"Error: {e}")
+            return True, f"An error occured: {e}"
+        finally:
+            # Ensure the database connection is closed
+            if self.conn:
+                self.conn.close()
 
 
 
