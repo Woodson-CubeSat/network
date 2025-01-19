@@ -65,14 +65,22 @@ class ManageUsers(Resource):
                 abort(400, message=message)
             return info, 200
 
-        elif action == "list_users":
+        if action == "list_users":
             error, message, info = secure_sql.listUsers(sudo=is_admin, key_db_token=key_db_token)
             if error:
                 abort(401, message=message)
             return info, 200
+        
+        if action == "jwt_auth" or action == "jwt":
+            current_user = get_jwt_identity()  # Retrieves user_id
+            claims = get_jwt()  # Retrieves all JWT claims
+            is_admin = claims.get("is_admin", False)
+            return {"user_id": current_user, "admin_status": is_admin}
+
 
         else:
             abort(405, message='Nonexistent action or incorrect use case.')
+
 
     @jwt_required()
     def put(self, action):

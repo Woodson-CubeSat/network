@@ -44,7 +44,7 @@ parser.add_argument('return_description', type=bool, location='form')
 
 # options for data (put)
 
-parser.add_argument('norad_id', type=int, location='form') # This argument will also be used as a filter for fetching telemetry
+parser.add_argument('norad_id', type=int, location='form') # This argument will also be used as a filter for fetching telemetry, and deleting satellites
 parser.add_argument('description', type=str, location='form')
 parser.add_argument('launch_date', type=str, location='form')
 parser.add_argument('deployment_date', type=str, location='form')
@@ -106,10 +106,10 @@ class ManageDB(Resource):
                     return {'message': 'An error occured while parsing your frames'}
                 if len(info) > 100:
                     # Generate the zip file
-                    telemetry_file_url = telemetryToZip(args.norad_id, info)
+                    telemetry_file = telemetryToZip(args.norad_id, info)
 
                     # Construct the full URL
-                    full_url = f"{base_url}{telemetry_file_url}"
+                    full_url = f"{base_url}/download_telemetry/{telemetry_file}"
 
                     # Return the full download URL
                     return {'message': 'The number of frames you requested exceeded the API limit. Please download your frames from the link provided.', 'download_url': full_url}
@@ -135,17 +135,16 @@ class ManageDB(Resource):
             start_timestamp = time()
             if len(str(args.norad_id)) != 5:
                 abort(405, message="Bad NORAD ID.")
-            if args.name == None:
-                abort(405, message="No name provided for satellite.")
             if args.key_id == None:
                 abort(405, message="Bad key ID.")
             print(args.norad_id)
             error, message, info = Sql().buildTelemetry(norad_id=args.norad_id, satnogs_cookies=args.satnogs_cookies, email=args.email, email_passwd=args.email_passwd)
-            info['time_taken'] -= start_timestamp
             if error:
                 abort(500, message=message)
             if not error:
+                info['time_taken'] -= start_timestamp
                 satnogs_key= Sql().getKey(key_id=args.key_id, satnogs_key=True)
+                print(satnogs_key)
 
                 error, message = Sql().buildSatInfo(norad_id=args.norad_id, satnogs_key=satnogs_key, description=args.description, launch_date=args.launch_date, deployment_date=args.deployment_date)
                 if error:
@@ -165,10 +164,10 @@ class ManageDB(Resource):
                     {'message': message}
         # webserver should authenticate and make sure user is an admin first
         if action == 'add_ground_station':
-            if args.key_id == None or args.n2yo_key == None or args.satnogs_key == None:
-                abort(400, message="Must include all required parameters.")
+            if args.name == None or args.lat == None or args.lng == None or args.alt == None or args.can_transmit == None or args.is_satnogs == None:
+                abort(405, message="Missing ground station information.")
             else:
-                error, message = Sql().addGroundstation(name=args.key_id, lat=args.n2yo_key, lng=args.satnogs_key, alt=args.n2yo_key, transmit=args.n2yo_key, satnogs=args.n2yo_key)
+                error, message = Sql().addGroundstation(name=args.name, lat=args.lat, lng=args.lng, alt=args.alt, transmit=args.can_transmit, satnogs=args.is_satnogs)
                 if error:
                     abort(500, message=message)
                 if not error:
@@ -178,15 +177,15 @@ class ManageDB(Resource):
             abort(405, message="Nonexsistent action or incorrect use case.")
 
 
-    # def delete(self, action):
-    #     print("hi")
-    #     print(action)
-    #     if action != 'delete_user':
-    #         abort(405, message='Nonexsistent action or incorrect use case.')
-    #     args = parser.parse_args()
-    #     error, error_message = SecureSql().deleteUser(auth_user_id=args.UserID, auth_user_passwd=args.Password, key_db_token=args.DBKey, user_id=args.user_id)
-    #     if not error:
-    #         return {'message': 'Successfully deleted user.'}
-    #     else:
-    #         abort(401, message=error_message)
+    def delete(self, action):
+        print("hi")
+        print(action)
+        if action != 'delete_satellite':
+            abort(405, message='Nonexsistent action or incorrect use case.')
+        args = parser.parse_args()
+        error, message = Sql().deleteSatellite(norad_id=args.norad_id)
+        if not error:
+            return {'message': message}
+        else:
+            abort(401, message=message)
 

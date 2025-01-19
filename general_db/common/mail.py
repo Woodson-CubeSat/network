@@ -74,7 +74,7 @@ def fetchLinks(email, passwd):
 #downloads data in csv format
 def download(link, norad_id):
     #path to cache will change depending on which folder you run the script in in vscode
-    with urllib.request.urlopen(link) as csvfile, open(f'{script_dir}/common/csv_cache/{norad_id}data.csv', 'w') as f:
+    with urllib.request.urlopen(link) as csvfile, open(f'{script_dir}/common/csv_cache/{norad_id}_data.csv', 'w') as f:
         f.write(csvfile.read().decode())
 
 

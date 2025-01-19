@@ -7,13 +7,13 @@ from common.constants import ttl
 
 # Parser for incoming requests
 parser = reqparse.RequestParser()
-parser.add_argument('UserID', type=str, location='headers', required=True, help='UserID is required')
-parser.add_argument('Password', type=str, location='headers', required=True, help='Password is required')
-parser.add_argument('DBKey', type=str, location='headers', required=True, help='DBKey is required')
+parser.add_argument('UserID', type=str, location='headers')
+parser.add_argument('Password', type=str, location='headers')
+parser.add_argument('DBKey', type=str, location='headers')
 
-class Authenticate(Resource):
+class CreateSession(Resource):
 
-    def get(self):
+    def get(self, action):
         args = parser.parse_args()
         user_id = args.UserID
         password = args.Password

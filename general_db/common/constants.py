@@ -2,9 +2,10 @@ import subprocess
 
 # initialize script directory constant
 script_dir = str(subprocess.check_output(["pwd"])).replace("b'", "").replace("n'", "")[:-1]
-base_url = "http://127.0.0.1:5000"
+base_url = "http://127.0.0.1:3000"
 # Hardcoded dictionary of decoders for each NORAD ID, these Kaitai Struct files have been sourced from satnogs decoders
 NORAD_DECODERS = {
+    44352: "Armadillo",      # armadillo.ksy
     51025: "Grizu263a",      # grizu263a.ksy
     55098: "Bdsat2",         # bdsat2.ksy
     47984: "Co65",           # co65.ksy
@@ -68,7 +69,7 @@ NORAD_DECODERS = {
     43687: "Cas4",           # cas4.ksy
     43873: "Cas5a",          # cas5a.ksy
     48267: "Casaasat",       # casaasat.ksy
-    46494: "Cute",           # cute.ksy
+    49263: "Cute",           # cute.ksy
     48275: "Chomptt",        # chomptt.ksy
     48044: "Catsat",         # catsat.ksy
     51051: "Veronika",       # veronika.ksy

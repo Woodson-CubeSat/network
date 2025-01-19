@@ -2,7 +2,7 @@ from flask import Flask
 from flask_restful import Api
 from flask_jwt_extended import JWTManager
 from apscheduler.schedulers.background import BackgroundScheduler
-from resources.auth import Authenticate
+from user_db.resources.create_session import CreateSession
 from resources.user import ManageUsers
 from common.constants import renew_secret_key
 import os
@@ -31,8 +31,8 @@ scheduler.start()
 api = Api(app)
 
 # Define routes
-api.add_resource(Authenticate, '/auth')
-api.add_resource(ManageUsers, '/manage_users/<action>')
+api.add_resource(CreateSession, '/create_session')
+api.add_resource(ManageUsers, '/<action>')
 
 if __name__ == '__main__':
     app.run(debug=True)

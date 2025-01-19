@@ -360,7 +360,6 @@ class SecureSql:
         key_db_token: str,
         satnogs_cookies = None,  # File in binary or hex
         user_id: str = None,
-        passwd: str = None,
         email: str = None,
         email_passwd: str = None,
         callsign: str = None,
