@@ -137,5 +137,5 @@ class SecureSql:
 
 
 if __name__ == "__main__":
-    if input("Are you sure you want to delete the database and recreate it? (y/n): ").strip().lower() == "y":
-        SecureSql().migrate()
+    # if input("Are you sure you want to delete the database and recreate it? (y/n): ").strip().lower() == "y":
+    SecureSql().migrate()

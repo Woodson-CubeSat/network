@@ -18,26 +18,26 @@ class Sql:
         self.cursor = self.conn.cursor()
 
     def createDB(self):
-        num_gs = int(input("How many ground stations would you like to add? "))
-        lats = []
-        lngs = []
-        alts = []
-        transmit = []
-        is_satnogs = []
-        for i in range(num_gs):
-            lats.append(float(getpass.getpass("Enter the decimal latitude for the ground station's location: ")))
-            lngs.append(float(getpass.getpass("Enter the decimal longitude for the ground station's location: ")))
-            lngs.append(float(getpass.getpass("Enter the decimal elevation in meters of the ground station: ")))
-            can_transmit = getpass.getpass("Can this ground station transmit? (y/n) ").lower()
-            if can_transmit == "y":
-                transmit.append(1)
-            else:
-                transmit.append(0)
-            satnogs_compatible = getpass.getpass("Will this ground station be used with the SatNogs network? (y/n) ").lower()
-            if satnogs_compatible == "y":
-                is_satnogs.append(1)
-            else:
-                is_satnogs.append(0)
+        # num_gs = int(input("How many ground stations would you like to add? "))
+        # lats = []
+        # lngs = []
+        # alts = []
+        # transmit = []
+        # is_satnogs = []
+        # for i in range(num_gs):
+        #     lats.append(float(getpass.getpass("Enter the decimal latitude for the ground station's location: ")))
+        #     lngs.append(float(getpass.getpass("Enter the decimal longitude for the ground station's location: ")))
+        #     lngs.append(float(getpass.getpass("Enter the decimal elevation in meters of the ground station: ")))
+        #     can_transmit = getpass.getpass("Can this ground station transmit? (y/n) ").lower()
+        #     if can_transmit == "y":
+        #         transmit.append(1)
+        #     else:
+        #         transmit.append(0)
+        #     satnogs_compatible = getpass.getpass("Will this ground station be used with the SatNogs network? (y/n) ").lower()
+        #     if satnogs_compatible == "y":
+        #         is_satnogs.append(1)
+        #     else:
+        #         is_satnogs.append(0)
         self.cursor.executescript(
             """
             DROP TABLE IF EXISTS telemtry;
@@ -80,11 +80,11 @@ class Sql:
         """
         )
 
-        for i in range(num_gs):
-            self.cursor.execute(  # fix later
-                f"""
-                INSERT INTO groundstations (station_id, lat, lng, alt, transmit, satnogs) VALUES ({token_hex(4)}, {lats[i]}, {lngs[i]}, {alts[i]} {can_transmit[i]}, {satnogs_compatible[i]})
-                """)
+        # for i in range(num_gs):
+        #     self.cursor.execute(  # fix later
+        #         f"""
+        #         INSERT INTO groundstations (station_id, lat, lng, alt, transmit, satnogs) VALUES ({token_hex(4)}, {lats[i]}, {lngs[i]}, {alts[i]} {can_transmit[i]}, {satnogs_compatible[i]})
+        #         """)
 
         self.conn.commit()
         self.conn.close()
@@ -97,7 +97,6 @@ class Sql:
 
 
 if __name__ == "__main__":
-    if input("Are you sure you want to delete the database and recreate it? (y/n) ").strip() == "y":
-        Sql().migrate()
+    Sql().migrate()
 
 
