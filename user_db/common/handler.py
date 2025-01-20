@@ -222,6 +222,8 @@ class SecureSql:
     def buildUserInfo(
         self,
         sudo: bool, # This value is passed from the JWT to indicate the current user's administrator status
+        username: str,
+        passwd: str,
         satnogs_cookies,  # File in a base64 string
         key_db_token: str,
         email: str,
@@ -258,9 +260,9 @@ class SecureSql:
                 )
                 # Generate IDs and hash
                 print(satnogs_cookies)
-                user_id = token_hex(16)
+                user_id = username
                 key_id = token_hex(16)
-                raw_password = token_hex(256)  # Initial password
+                raw_password = passwd  # Initial password
                 passwd_hash = bcrypt.hashpw(raw_password.encode(), bcrypt.gensalt()).decode()  # Hash the password
                 # Insert user data
                 user_db_cursor.execute(

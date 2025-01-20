@@ -21,6 +21,8 @@ parser.add_argument('get_creation_time', type=bool, location='form')
 
 
 # Options for data (put)
+parser.add_argument('username', type=str, location='form')
+parser.add_argument('passwd', type=str, location='form')
 parser.add_argument('email', type=str, location='form')
 parser.add_argument('email_passwd', type=str, location='form')
 parser.add_argument('satnogs_cookies', type=str, location='form')
@@ -101,6 +103,8 @@ class ManageUsers(Resource):
 
         if action == 'create_user':
             error, message, info = secure_sql.buildUserInfo(
+                username=args.username,
+                passwd=args.passwd,
                 satnogs_cookies=args.satnogs_cookies,
                 auth_user_id=current_user,
                 sudo=is_admin,
@@ -121,6 +125,7 @@ class ManageUsers(Resource):
                 key_db_token=key_db_token,
                 email=args.email,
                 email_passwd=args.email_passwd,
+                satnogs_cookies=args.satnogs_cookies,
                 callsign=args.callsign
             )
             if error:
