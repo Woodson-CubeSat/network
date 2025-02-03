@@ -1,0 +1,49 @@
+services:
+  user-api:
+    build: ./user-api
+    ports:
+      - "8000:8000"
+    networks:
+      - app-network
+    volumes:
+      - shared-data:/usr/src/shared # Ensure shared volume is used for admin_info.json
+      - user-api-data:/usr/src/user-api/common/data # Dedicated volume for user-api database
+
+  general-api:
+    build: ./general-api
+    ports:
+      - "5500:5500"
+    networks:
+      - app-network
+    depends_on:
+      - selenium
+    volumes:
+      - general-api-data:/usr/src/general-api/common/data # Dedicated volume for general-api database
+
+  central-webserver:
+    build: ./central-webserver
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    depends_on:
+      - user-api
+      - general-api
+    volumes:
+      - shared-data:/usr/src/shared # This is necessary for DB_KEY access
+
+  selenium:
+    image: selenium/standalone-chrome
+    platform: linux/amd64
+    networks:
+      - app-network
+
+volumes:
+  shared-data: # This ensures central-webserver and user-api can share admin_info.json
+  user-api-data:
+  general-api-data:
+
+
+networks:
+  app-network:
+    driver: bridge
