@@ -5,23 +5,6 @@ from pysqlcipher3 import dbapi2 as securesql
 import bcrypt
 from queue import Queue
 
-# class ConnectionPool:
-#     def __init__(self, db_path, pool_size=5):
-#         self.pool = Queue(maxsize=pool_size)
-#         for _ in range(pool_size):
-#             conn = securesql.connect(db_path, check_same_thread=False)
-#             self.pool.put(conn)
-
-#     def get_connection(self):
-#         return self.pool.get()
-
-#     def release_connection(self, conn):
-#         self.pool.put(conn)
-
-#     def close_all(self):
-#         while not self.pool.empty():
-#             conn = self.pool.get()
-#             conn.close()
 class ConnectionPool:
     def __init__(self, db_path, pool_size=5):
         self.pool = Queue(maxsize=pool_size)
@@ -267,7 +250,7 @@ class SecureSql:
             )
             user_conn.commit()
 
-            return False, "", {'username': username, 'key_id': key_id, 'description': 'User added successfully'}
+            return False, "", {'username': username, 'key_id': key_id, 'description': 'User added successfully.'}
 
         except Exception as e:
             return True, f"An error occurred: {e}", {}
