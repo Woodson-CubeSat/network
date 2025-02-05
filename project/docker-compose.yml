@@ -1,8 +1,6 @@
 services:
   user-api:
     build: ./user-api
-    ports:
-      - "8000:8000"
     networks:
       - app-network
     volumes:
@@ -11,8 +9,6 @@ services:
 
   general-api:
     build: ./general-api
-    ports:
-      - "5500:5500"
     networks:
       - app-network
     depends_on:
@@ -33,10 +29,18 @@ services:
       - shared-data:/usr/src/shared # This is necessary for DB_KEY access
 
   selenium:
-    image: selenium/standalone-chrome
-    platform: linux/amd64
+    image: seleniarm/standalone-chromium # ARM64-compatible image
+    platform: linux/arm64 # Match Mac M1/M2
     networks:
       - app-network
+    ports:
+      - "4444:4444" # Selenium WebDriver Port
+      - "7900:7900" # VNC Debugging (optional)
+    shm_size: '2g' # Prevent crashes due to lack of shared memory
+    environment:
+      - SE_NODE_MAX_SESSIONS=5 # Allows multiple parallel browser sessions
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+      - SE_NODE_SESSION_TIMEOUT=30
 
 volumes:
   shared-data: # This ensures central-webserver and user-api can share admin_info.json

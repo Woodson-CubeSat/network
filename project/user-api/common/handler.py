@@ -262,10 +262,10 @@ class SecureSql:
         try:
             error, user_db_key = self.getUserDBKey(key_db_pass=key_db_token)
             if error:
-                return True, user_db_key, {}
+                return True, user_db_key
 
             if not sudo:
-                return True, "Must be an administrator to delete users.", {}
+                return True, "Must be an administrator to delete users."
 
             user_conn = self.user_db_pool.get_connection()
             user_cursor = user_conn.cursor()
@@ -277,7 +277,7 @@ class SecureSql:
             user_cursor.execute("SELECT key_id FROM users WHERE user_id=?", (user_id,))
             data = user_cursor.fetchone()
             if not data:
-                return True, "User does not exist.", {}
+                return True, "User does not exist."
 
             key_id = data[0]
             user_cursor.execute("DELETE FROM users WHERE user_id=?", (user_id,))
@@ -294,6 +294,7 @@ class SecureSql:
 
     def updateUserInfo(self, key_db_token: str, user_id: str, **kwargs):
         try:
+            print("\n\n\n\nkwargs\n\n\n\n", kwargs)
             error, user_db_key = self.getUserDBKey(key_db_pass=key_db_token)
             if error:
                 return True, user_db_key
@@ -307,31 +308,37 @@ class SecureSql:
 
             updated = []
             if 'callsign' in kwargs:
-                user_cursor.execute("UPDATE users SET callsign=? WHERE user_id=?", (kwargs['callsign'], user_id))
-                updated.append('callsign')
+                if kwargs['callsign'] != None:
+                    user_cursor.execute("UPDATE users SET callsign=? WHERE user_id=?", (kwargs['callsign'], user_id))
+                    updated.append('callsign')
 
             login_query = []
             login_params = []
             if 'email' in kwargs:
-                login_query.append("email=?")
-                login_params.append(kwargs['email'])
+                if kwargs['email'] != None:
+                    login_query.append("email=?")
+                    login_params.append(kwargs['email'])
+                    updated.append('email')
             if 'email_passwd' in kwargs:
-                login_query.append("email_passwd=?")
-                login_params.append(kwargs['email_passwd'])
+                if kwargs['email_passwd'] != None:
+                    login_query.append("email_passwd=?")
+                    login_params.append(kwargs['email_passwd'])
+                    updated.append('email_passwd')
             if 'satnogs_cookies' in kwargs:
-                login_query.append("satnogs_cookies=?")
-                login_params.append(kwargs['satnogs_cookies'])
-
+                if kwargs['satnogs_cookies'] != None:
+                    login_query.append("satnogs_cookies=?")
+                    login_params.append(kwargs['satnogs_cookies'])
+                    updated.append('satnogs_cookies')
             if login_query:
+                print("\n\n\nlogin query\n\n\n", login_query)
                 user_cursor.execute("SELECT key_id FROM users WHERE user_id=?", (user_id,))
                 key_id = user_cursor.fetchone()[0]
                 login_params.append(key_id)
                 query = f"UPDATE logins SET {', '.join(login_query)} WHERE key_id=?"
                 user_cursor.execute(query, login_params)
-                updated.extend(login_query)
 
             user_conn.commit()
-            return False, f"Successfully updated: {', '.join(updated)}"
+            return False, f"Successfully updated: {', '.join(updated)} for user {user_id}."
 
         except Exception as e:
             return True, f"An error occurred: {e}"

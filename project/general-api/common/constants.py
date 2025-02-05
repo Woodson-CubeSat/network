@@ -9,6 +9,8 @@ expiration_time = 24*60*60
 WORKERS = 2
 THREADS = 4
 BIND = '0.0.0.0:5500'
+SELENIUM_REMOTE_URL = "http://selenium:4444/wd/hub"  # Connect to Selenium inside Docker
+
 
 # Hardcoded dictionary of decoders for each NORAD ID, these Kaitai Struct files have been sourced from satnogs decoders
 NORAD_DECODERS = {

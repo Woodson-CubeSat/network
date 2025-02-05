@@ -80,7 +80,7 @@ class ManageUsers(Resource):
                     requests.delete(url=USER_API_URL+"/delete_user", data={'user_id': args.username}, headers={"Authorization": args.Authorization})
             else:
                 return create_user_query.json(), create_user_query.status_code
-        if action == 'update_user_info':
+        if action == 'update_user_info' or action == 'update_info':
             update_info_query = requests.put(url=USER_API_URL+"/update_info", data={"email": args.email, "email_passwd": args.email_passwd, "satnogs_cookies": args.satnogs_cookies, "callsign": args.callsign}, headers={"Authorization": args.Authorization}) 
             return update_info_query.json(), update_info_query.status_code
         else:
