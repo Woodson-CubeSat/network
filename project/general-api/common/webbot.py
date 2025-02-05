@@ -2,6 +2,7 @@ import os
 import time
 import pickle
 import base64
+from common.constants import SELENIUM_REMOTE_URL
 #from common.constants import script_dir
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -29,14 +30,25 @@ def saveCookies():
     print(f"Cookies saved to: {cookie_path}")
     firefox.quit()
 
+
 class Webbot:
     def __init__(self):
-        """ Initializes WebDriver for Chrome """
+        """ Initializes WebDriver for Chrome inside Docker """
         chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument("--headless")  # Optional: Run in the background
-        chrome_options.add_argument("--disable-gpu")  # Helps in headless mode
-        chrome_options.add_argument("--no-sandbox")  # Helps in some environments
-        self.web = webdriver.Chrome(service=Service(), options=chrome_options)
+        # chrome_options.add_argument("--headless")  # Required for Docker
+        # chrome_options.add_argument("--disable-gpu")
+        # chrome_options.add_argument("--no-sandbox")
+        # chrome_options.add_argument("--disable-dev-shm-usage")  # Fixes crashes in some environments
+        # chrome_options.add_argument("--disable-extensions")  # Prevent Chrome startup errors
+        # chrome_options.add_argument("--disable-infobars")  # Removes extra UI elements
+        chrome_options.add_argument("--start-maximized")
+
+        # Connect to Selenium Server in Docker
+        self.web = webdriver.Remote(
+            command_executor=SELENIUM_REMOTE_URL,
+            options=chrome_options
+        )
+
 
     def encodeCookies(self):
         """ Encode cookies as a base64 string """
@@ -55,32 +67,38 @@ class Webbot:
             self.web.add_cookie(cookie)
 
     def clicker(self, norad_id: int, satnogs_cookies: str):
-        """ Automates website navigation and data clicking """
-        norad_id = str(norad_id)
-        self.web.get('https://db.satnogs.org/')
+        try:
+            """ Automates website navigation and data clicking """
+            norad_id = str(norad_id)
+            self.web.get('https://db.satnogs.org/')
 
-        # Wait for page to load before adding cookies
-        WebDriverWait(self.web, 10).until(
-            EC.presence_of_element_located((By.ID, "search"))
-        )
+            # Wait for page to load before adding cookies
+            WebDriverWait(self.web, 10).until(
+                EC.presence_of_element_located((By.ID, "search"))
+            )
 
-        self.loadCookies(satnogs_cookies)  # Load cookies
+            self.loadCookies(satnogs_cookies)  # Load cookies
 
-        # Refresh to apply cookies
-        self.web.get('https://db.satnogs.org/')
-        WebDriverWait(self.web, 10).until(
-            EC.presence_of_element_located((By.ID, "search"))
-        )
+            # Refresh to apply cookies
+            self.web.get('https://db.satnogs.org/')
+            WebDriverWait(self.web, 10).until(
+                EC.presence_of_element_located((By.ID, "search"))
+            )
 
-        search_box = self.web.find_element(By.ID, "search")
-        search_box.send_keys(norad_id + Keys.RETURN)
+            search_box = self.web.find_element(By.ID, "search")
+            search_box.send_keys(norad_id + Keys.RETURN)
 
-        # Wait and click on the "Data" tab
-        WebDriverWait(self.web, 5).until(
-            EC.element_to_be_clickable((By.ID, "data-tab"))
-        ).click()
+            # Wait and click on the "Data" tab
+            WebDriverWait(self.web, 5).until(
+                EC.element_to_be_clickable((By.ID, "data-tab"))
+            ).click()
 
-        # Wait and click on "Everything"
-        WebDriverWait(self.web, 5).until(
-            EC.element_to_be_clickable((By.LINK_TEXT, "Everything"))
-        ).click()
+            # Wait and click on "Everything"
+            WebDriverWait(self.web, 5).until(
+                EC.element_to_be_clickable((By.LINK_TEXT, "Everything"))
+            ).click()
+        finally:
+            self.web.quit()
+
+
+
