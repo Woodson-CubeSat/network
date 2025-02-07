@@ -311,6 +311,12 @@ class SecureSql:
                 if kwargs['callsign'] != None:
                     user_cursor.execute("UPDATE users SET callsign=? WHERE user_id=?", (kwargs['callsign'], user_id))
                     updated.append('callsign')
+            if 'passwd' in kwargs:
+                if kwargs['passwd'] != None:
+                    login_query.append("passwd=?")
+                    passwd_hash = bcrypt.hashpw(kwargs['passwd'].encode(), bcrypt.gensalt()).decode()
+                    user_cursor.execute("UPDATE users SET passwd_hash=? WHERE user_id=?", (passwd_hash, user_id))
+                    updated.append('password')
 
             login_query = []
             login_params = []

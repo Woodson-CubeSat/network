@@ -145,7 +145,8 @@ class ManageUsers(Resource):
                 email=args.email,
                 email_passwd=args.email_passwd,
                 satnogs_cookies=args.satnogs_cookies,
-                callsign=args.callsign
+                callsign=args.callsign,
+                passwd = args.passwd
             )
             if error:
                 abort(401, description=message)
