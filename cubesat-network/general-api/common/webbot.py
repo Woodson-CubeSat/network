@@ -97,6 +97,7 @@ class Webbot:
             WebDriverWait(self.web, 5).until(
                 EC.element_to_be_clickable((By.LINK_TEXT, "Everything"))
             ).click()
+            time.sleep(4)
         finally:
             self.web.quit()
 

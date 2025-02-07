@@ -695,7 +695,6 @@ class Sql:
             print("clicking link\n")
             try:
                 webbot.clicker(norad_id, satnogs_cookies)
-                time.sleep(20)
             except:
                 return True, "Your Satnogs cookies have expired. Please renew them and try again.", {}
             print("fetching link\n")

@@ -41,4 +41,4 @@ class CreateSession(Resource):
             expires_delta=timedelta(seconds=TTL)
         )
 
-        return {"description": "Successfully authenticated user.", "token": access_token}, 200
+        return {"description": f"Successfully authenticated user {user_id}.", "token": access_token}, 200
