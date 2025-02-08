@@ -15,4 +15,4 @@ api.add_resource(ProxyDownload, '/download_telemetry/<string:filename>')
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()

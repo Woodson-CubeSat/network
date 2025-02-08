@@ -35,4 +35,4 @@ api.add_resource(CreateSession, '/create_session')
 api.add_resource(ManageUsers, '/<action>')
 
 if __name__ == '__main__':
-    app.run(debug=True, port=3000)
+    app.run(port=3000)

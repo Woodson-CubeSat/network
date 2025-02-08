@@ -29,8 +29,8 @@ services:
       - shared-data:/usr/src/shared # This is necessary for DB_KEY access
 
   selenium:
-    image: seleniarm/standalone-chromium # ARM64-compatible image
-    platform: linux/arm64 # Match Mac M1/M2
+    image: seleniarm/standalone-chromium
+    platform: linux/amd64
     networks:
       - app-network
     ports:
@@ -43,10 +43,24 @@ services:
       - SE_NODE_SESSION_TIMEOUT=30
 
 volumes:
-  shared-data: # This ensures central-webserver and user-api can share admin_info.json
+  shared-data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /mnt/docker-volumes/shared-data
+      o: bind
   user-api-data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /mnt/docker-volumes/user-api-data
+      o: bind
   general-api-data:
-
+    driver: local
+    driver_opts:
+      type: none
+      device: /mnt/docker-volumes/general-api-data
+      o: bind
 
 networks:
   app-network:

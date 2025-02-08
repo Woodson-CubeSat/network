@@ -3,10 +3,13 @@ FROM python:3.12-slim
 WORKDIR /usr/src/general-api
 
 COPY requirements.txt ./
+
 RUN apt-get update && apt-get install -y \
     libxi6 \
     libgconf-2-4 \
+    cron \
     && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 
