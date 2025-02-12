@@ -1,6 +1,7 @@
 services:
   user-api:
     build: ./user-api
+    restart: always
     networks:
       - app-network
     volumes:
@@ -9,6 +10,7 @@ services:
 
   general-api:
     build: ./general-api
+    restart: always
     networks:
       - app-network
     depends_on:
@@ -18,6 +20,7 @@ services:
 
   central-webserver:
     build: ./central-webserver
+    restart: always
     ports:
       - "3000:3000"
     networks:
@@ -31,6 +34,7 @@ services:
   selenium:
     image: seleniarm/standalone-chromium
     platform: linux/amd64
+    restart: always
     networks:
       - app-network
     ports:
