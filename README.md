@@ -1,11 +1,9 @@
 # W.T. Woodson HS CubeSat Club
-repo for the WTW CubeSat Club (software stuff)
-will also add resources for anyone who wants to contribute but doesn't know where to start
 
-there are two main parts that we need to work on:
-  the satellite side, 
-  the ground station/server side, 
-  SQL database (both ground station and satellite)
+CubeSat network system composed of three container API system (two internal, one external):
+  1. The data container: this container collects, organizes, decodes, processes, and packages telemetry from a wide variety of satellites and different sources
+  2. The user container: this container manages user information, logins, security, permissions, and ground station transmit access (upcoming)
+  3. The central container: this is the container that users can access the network API from; it communicates with the two other containers to build a response to requests, schedule         updates and events, etc.
 
 # LICENSE INFO
 
